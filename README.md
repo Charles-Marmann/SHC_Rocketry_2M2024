@@ -9,7 +9,7 @@ Required Programs
 -----------------------
 ### 1. VScode [Download Here](https://code.visualstudio.com/download).
 ### 2. Arduino IDE [Download Here](https://www.arduino.cc/en/software).
-### 3. Platform IO (instal on VScode) [Instructions Here](https://platformio.org/install/ide?install=vscode).
+### 3. Platform IO (Install on VScode) [Instructions Here](https://platformio.org/install/ide?install=vscode).
 ## 4. Github Desktop [Download Here](https://desktop.github.com/download/).
 
 
