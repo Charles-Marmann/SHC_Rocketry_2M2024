@@ -7,7 +7,7 @@ Repository for all Space Hardware Club Two Month Rocketry Challenge code.
 
 Required Programs
 -----------------------
-### 1. VScode [Download Here]https://code.visualstudio.com/download
+### 1. VScode [Download Here](https://code.visualstudio.com/download).
 
 
 
