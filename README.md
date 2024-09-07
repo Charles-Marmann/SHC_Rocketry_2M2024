@@ -5,6 +5,12 @@ Repository for all Space Hardware Club Two Month Rocketry Challenge code.
 ***DO NOT EDIT FILES ON THE MAIN BRANCH***
 *****************************************************
 
+Required Programs
+-----------------------
+### 1. VScode [Download Here]https://code.visualstudio.com/download
+
+
+
 How To Create A Project
 -----------------------
 ### 1. Create a new branch, give it the same name as your team
