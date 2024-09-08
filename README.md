@@ -1,7 +1,8 @@
 # SHC_Rocketry_2M2024
 Repository for all Space Hardware Club Two Month Rocketry Challenge code.
 
-# Designed and Overseen by Charles Marmann Email: cmm0077@uah.edu Discord: Charles_Marmann
+# Designed and Overseen by Charles Marmann 
+# Email: cmm0077@uah.edu Discord: Charles_Marmann
 
 *****************************************************
 ***DO NOT EDIT FILES ON THE MAIN BRANCH***
