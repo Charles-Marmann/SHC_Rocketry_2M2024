@@ -24,6 +24,7 @@ This is a basic IDE for programming microcontrollers, this program is only good 
 ### 4. Github Desktop [Download Here](https://desktop.github.com/download/).
 Github desktop is an application that will allow your team to easily work on the same project. The importance of this application will become more apparent once you start working together on your program.
 
+***********************************************************************************************************************
 ## Joining the Github repository
 ----------------------------
 If you are seeing this file it is safe to assume that you have at least found the Github repository for the Rocketry Two Month 2024 Challenge. Since this repository is private you will need to send me your github username, preferably in your team's software chanel. Once you have access to the repository you will need to open up github desktop.
@@ -35,8 +36,17 @@ If you are seeing this file it is safe to assume that you have at least found th
 ![alt text](image-7.png)
 ## Since this part can be a little tricky, don't hesitate to ask me for help.
 
+***********************************************************************************************************************
+## Using Github Desktop
+------------------------
+Below is the home page of Github Desktop with multiple areas highlighted
+![alt text](image-8.png)
+### RED: This area is where you will be able to see changes that you have made as well as past changes. At the bottom is the commit button. After giving you changes a name, you can press the commit button to upload your changes.
+### GREEN: This area is where you will be able to open your project in VSCode, do note that you will still need to open your project in with Platform IO afterwards.
+### BLUE: This is the most important button. When changes are made you will need to click this button to download them, after you commit changes you will need to press this button to upload them.
+## Github Desktop does not work like google docs! Two people cannot actively make changes on the same branch without running into some issues. Github is really good at sorting these issues out, but you should always double check your code afterwards.
 
-
+***********************************************************************************************************************
 ## How To Create A Project
 -----------------------
 ### 1. Create a new branch, give it the same name as your team
@@ -60,3 +70,9 @@ If you are seeing this file it is safe to assume that you have at least found th
 ***********************************************************************************************************************
 ![alt text](image-4.png)
 ***********************************************************************************************************************
+## Properly Opening Your Project With Platform IO
+--------------------------------------------------
+If you only open your project with VSCode you will not be able to compile or upload your code to the Pico.
+What you will need to do is open the project with Platform IO.
+### 1. With VSCode open click on the ant icon to open Platform IO.
+
