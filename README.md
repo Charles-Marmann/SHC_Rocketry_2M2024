@@ -74,5 +74,10 @@ Below is the home page of Github Desktop with multiple areas highlighted
 --------------------------------------------------
 If you only open your project with VSCode you will not be able to compile or upload your code to the Pico.
 What you will need to do is open the project with Platform IO.
-### 1. With VSCode open click on the ant icon to open Platform IO.
+### 1. With VSCode open click on the ant icon to open Platform IO and then click the open option.
+![alt text](image-10.png)
+### 2. After clicking open you will need to navigate to your github folder, in the image below you can see the default file address, I also suggest you favorite the folder so you can easily find it again.
+![alt text](image-11.png)
+
+
 
