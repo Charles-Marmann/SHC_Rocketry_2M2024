@@ -1,11 +1,11 @@
 #include <Arduino.h>
 
 // put function declarations here:
-int myFunction(int, int);
+int flightState = 0; // 0 = prelaunch, 1 = ascent, 2 = braking, 3 = landed
 
 void setup() {
   // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  // int flightState = 1; // launch detected!
 }
 
 void loop() {
@@ -13,6 +13,3 @@ void loop() {
 }
 
 // put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
-}
