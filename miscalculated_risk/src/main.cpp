@@ -8,11 +8,18 @@
 #include <Adafruit_BNO055.h>
 #include "Adafruit_BMP3XX.h"
 #include <utility/imumaths.h>
+#include <hardware/flash.h>
+
+//using serial? turn off for flight
+const bool output_serial = true;
 
 //SD Card reader stuff:
 #define CS_PIN 17  //Connect Chip Select pin to GPIO 17 on the Pi Pico
 //end of sd card stuff
 
+//offset from start of flash memory for BNO055 calibration data
+//we can access this at XIP_BASE + 1024k.
+#define CALIB_FLASH_OFFSET (1024 * 1024)
 
 //Aerobrake and LED pin assignments
 #define NUM_LEDS 4
@@ -24,11 +31,11 @@ CRGB leds[NUM_LEDS];
 Servo BRAKE_PWM;
 //end of pwm stuff
 
-
 //Sensor assignments and sensor stuff
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
-Adafruit_BMP3XX bmp;
+#define BNO055_SAMPLERATE_DELAY_MS (100)
 
+Adafruit_BMP3XX bmp;
 int SEALEVELPRESSURE_HPA = 1013.25;
 //end of sensor stuff
 
@@ -38,12 +45,14 @@ void setup() {
 //Connect to serial monitor
 BRAKE_PWM.attach(9);
 //pinMode(BRAKE_PWM, OUTPUT);
-Serial.begin(115200);
+if (output_serial) 
+{
+  Serial.begin(115200);
   while (!Serial) delay(10); //Wait to start communiticating until serial monitor connects
   delay(5000);
-Serial.println("Connected to Flight Computer");
+  Serial.println("Connected to Flight Computer");
   Serial.println("");
-
+}
 //Initialize communication busses
 SPI.begin();
 Wire.begin();
@@ -71,11 +80,89 @@ bmp.setPressureOversampling(BMP3_OVERSAMPLING_16X);
 bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_7);
 bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
-//Use external crystal for better accuracy
+//Begin BNO055 setup
+
+//Search for BNO055 calibration data
+//romAddress is our current place in ROM
+int romAddress = CALIB_FLASH_OFFSET;
+bool foundCalib = false;
+
+
+adafruit_bno055_offsets_t calibrationData;
+sensor_t sensor;
+
+/*
+*  Look for the sensor's unique ID in ROM.
+*  Isn't foolproof, but it's better than nothing.
+*/
+bno.getSensor(&sensor);
+//i have no idea if this works; goes to the offset in ROM to find the saved sensor ID
+if (*(int32_t *)(XIP_BASE + romAddress) != sensor.sensor_id)
+{
+  Serial.println("\nNo Calibration Data for this sensor exists in ROM");
+  delay(500);
+}
+else
+{
+  Serial.println("\nFound Calibration for this sensor in ROM.");
+ 
+  //increment working memory address to the calibration data
+  romAddress += FLASH_PAGE_SIZE;
+  calibrationData = *(adafruit_bno055_offsets_t *)(XIP_BASE + romAddress);
+
+  bno.setSensorOffsets(calibrationData);
+
+  Serial.println("\n\nCalibration data loaded into BNO055");
+  foundCalib = true;
+}
+
+delay(250);
+
+//Use external crystal for better accuracy, example code claims this must be done after loading calibration data
 bno.setExtCrystalUse(true);
-//Wait for BNO055 Calibration, then set calib LED
 
+//complete calibration
+sensors_event_t event;
+bno.getEvent(&event);
+if (!foundCalib)
+{
+    Serial.println("Please Calibrate Sensor: ");
+    while (!bno.isFullyCalibrated())
+    {
+        bno.getEvent(&event);
+        delay(BNO055_SAMPLERATE_DELAY_MS);
+    }
+}
 
+Serial.println("\nFully calibrated!");
+uint8_t newCalib[22];
+bno.getSensorOffsets(newCalib); //Get calibration offsets
+Serial.println("\n\nStoring calibration data to ROM...");
+
+//back to sensor id location
+romAddress = CALIB_FLASH_OFFSET;
+bno.getSensor(&sensor);
+//turn sensor into an array of uint8_t
+uint8_t bnoID[FLASH_PAGE_SIZE];
+bnoID[3] = (uint8_t)sensor.sensor_id;
+bnoID[2] = (uint8_t)(sensor.sensor_id>>=8);
+bnoID[1] = (uint8_t)(sensor.sensor_id>>=8);
+bnoID[0] = (uint8_t)(sensor.sensor_id>>=8);
+
+//Disable interrupts while writing to ROM
+uint32_t ints = save_and_disable_interrupts();
+flash_range_erase (romAddress, FLASH_SECTOR_SIZE);
+flash_range_program (romAddress, bnoID, FLASH_PAGE_SIZE);
+//increment
+romAddress += FLASH_PAGE_SIZE;
+flash_range_program (romAddress, newCalib, FLASH_PAGE_SIZE);
+restore_interrupts (ints);
+
+Serial.println("Data stored to ROM.");
+
+//End BNO055 Setup
+
+//Repeatedly check accelerometer and barometer altitude here:
 
 }
 
@@ -117,20 +204,13 @@ for (pos = 0; pos <= 360; pos += 1) { // goes from 0 degrees to 180 degrees
 //delay(10000);
 //analogWrite(BRAKE_PWM,200);
   
-delay(5000);
+//delay(5000);
 
 //analogWrite(LED_PWM,10);
 
 
 }
 
-void saveCalibration() {
-  uint8_t calData[22];
-  bno.getSensorOffsets(calData); // Get calibration offsets
-  for (int i = 0; i < 22; i++) {
-    Serial.print(calData[i]);  // Write to EEPROM
-  }
-}  
 
 
 
