@@ -57,7 +57,7 @@ Wire.begin();
     Serial.println("Error: No Barometer found on I2C bus");
     while (1);
   }
- if (!SD.begin(CS_PIN, SPI)) { //Display error message if not able to connect to Micro SD card adapter
+ if (!SD.begin(CS_PIN)) { //Display error message if not able to connect to Micro SD card adapter
     Serial.println("Error: Unable to initialize SD card, no adapter found on SPI bus");
     while (1); 
   }
@@ -71,9 +71,10 @@ bmp.setPressureOversampling(BMP3_OVERSAMPLING_16X);
 bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_7);
 bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
+//Use external crystal for better accuracy
+bno.setExtCrystalUse(true);
+//Wait for BNO055 Calibration, then set calib LED
 
-
-//Put Bno055 calibration code here
 
 
 }
