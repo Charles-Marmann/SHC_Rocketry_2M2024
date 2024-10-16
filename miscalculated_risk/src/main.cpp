@@ -10,11 +10,23 @@
 #include <utility/imumaths.h>
 #include <hardware/flash.h>
 
-//using serial? turn off for flight
-const bool output_serial = true;
+//wait for serial? turn off for flight
+const bool forceSerial = true;
 
-unsigned long loopStart; //time (micros) at beginning of loop, for cycle time calculation
-int loopCount = 0;
+/*
+0 - Startup
+1 - Awaiting launch
+2 - Ascent
+3 - Braking
+4 - Landed
+*/
+int flightState = 0;
+
+//time tracking
+unsigned long loopStart; //time (micros) set at beginning of loop, for loop time calculation
+unsigned long loopTime; //delta-t (micros) calculated at end of loop
+unsigned long timeLoopTimePrinted = 0; //time(micros) set every time the loop time is printed to serial
+
 //used for sensor output during calibration
 const double degToRad = 57.295779513;
 
@@ -63,6 +75,11 @@ void displaySensorOffsets(const adafruit_bno055_offsets_t &calibData);
 
 int pos = 0;
 
+/**************************************************************************
+
+SETUP LOOP
+
+**************************************************************************/
 void setup() {
   //initialize motor
   BRAKE_PWM.writeMicroseconds(500);
@@ -70,14 +87,17 @@ void setup() {
   //pinMode(BRAKE_PWM, OUTPUT);
 
   //Connect to serial monitor
-  if (output_serial) 
-  {
-    Serial.begin(115200);
+  Serial.begin(115200);
+  if (forceSerial) {
     while (!Serial) delay(10); //Wait to start communiticating until serial monitor connects
     delay(250);
-    Serial.println("Connected to Flight Computer");
-    Serial.println("");
   }
+  else{
+    delay(500);
+  }
+
+  Serial.println("Connected to Flight Computer");
+  Serial.println("");
   //Initialize communication busses
   SPI.begin();
   Wire.begin();
@@ -247,6 +267,7 @@ void setup() {
   //End BNO055 Setup
 
   //Repeatedly check accelerometer and barometer altitude here:
+  flightState = 1;
   sensors_event_t accelerometerData;
   do {
     bno.getEvent(&accelerometerData, Adafruit_BNO055::VECTOR_ACCELEROMETER);
@@ -258,10 +279,16 @@ void setup() {
     delay(BNO055_SAMPLERATE_DELAY_MS);
 
   } while ((accelerometerData.acceleration.y <= 10) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - AltOffset) <= 10));
-  //
+
+  flightState = 2;
   Serial.println("Launch Detected!");
 }
 
+/**************************************************************************
+
+MAIN LOOP
+
+**************************************************************************/
 void loop() {
   loopStart = micros();
 
@@ -269,16 +296,15 @@ void loop() {
   FastLED.show(); 
   //delay(500);
 
-  //Sample cycle time of every ten loops
-  if (loopCount >= 9) {
-    loopCount = 0;
-    Serial.print("Cycle time: ");
-    Serial.print(loopStart - micros()); //Delta-t of the loop
+  //Print loop time every half a second
+  if ((micros() - timeLoopTimePrinted) >= (500 * 1000)) {
+    timeLoopTimePrinted = micros();
+    Serial.print("Loop time: ");
+    Serial.print(loopTime);
     Serial.println(" microseconds");
   } 
-  else {
-    loopCount ++;
-  }
+
+  loopTime = loopStart - micros();
 }
 
 
