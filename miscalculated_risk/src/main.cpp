@@ -248,18 +248,6 @@ void loop() {
 fill_solid(leds, NUM_LEDS, CRGB::Green);  // Fill all LEDs with Green
 FastLED.show(); 
 delay(500);
-/*
-for (pos = 0; pos <= 360; pos += 1) { // goes from 0 degrees to 180 degrees
-    // in steps of 1 degree
-    BRAKE_PWM.write(pos);              // tell servo to go to position in variable 'pos'
-    delay(15);                       // waits 15ms for the servo to reach the position
-  }
-  for (pos = 360; pos >= 0; pos -= 1) { // goes from 180 degrees to 0 degrees
-    BRAKE_PWM.write(pos);              // tell servo to go to position in variable 'pos'
-    delay(15);                       // waits 15ms for the servo to reach the position
-  }
-*/
-
 
 }
 
@@ -370,62 +358,3 @@ void displaySensorOffsets(const adafruit_bno055_offsets_t &calibData)
     Serial.print("\nMag Radius: ");
     Serial.print(calibData.mag_radius);
 }
-
-
-
-/*void printEvent(sensors_event_t* event) {
-  double x = -1000000, y = -1000000 , z = -1000000; //dumb values, easy to spot problem
-  if (event->type == SENSOR_TYPE_ACCELEROMETER) {
-    Serial.print("Accl:");
-    x = event->acceleration.x;
-    y = event->acceleration.y;
-    z = event->acceleration.z;
-  }
-  else if (event->type == SENSOR_TYPE_ORIENTATION) {
-    Serial.print("Orient:");
-    x = event->orientation.x;
-    y = event->orientation.y;
-    z = event->orientation.z;
-  }
-  else if (event->type == SENSOR_TYPE_MAGNETIC_FIELD) {
-    Serial.print("Mag:");
-    x = event->magnetic.x;
-    y = event->magnetic.y;
-    z = event->magnetic.z;
-  }
-  else if (event->type == SENSOR_TYPE_GYROSCOPE) {
-    Serial.print("Gyro:");
-    x = event->gyro.x;
-    y = event->gyro.y;
-    z = event->gyro.z;
-  }
-  else if (event->type == SENSOR_TYPE_ROTATION_VECTOR) {
-    Serial.print("Rot:");
-    x = event->gyro.x;
-    y = event->gyro.y;
-    z = event->gyro.z;
-  }
-  else if (event->type == SENSOR_TYPE_LINEAR_ACCELERATION) {
-    Serial.print("Linear:");
-    x = event->acceleration.x;
-    y = event->acceleration.y;
-    z = event->acceleration.z;
-  }
-  else if (event->type == SENSOR_TYPE_GRAVITY) {
-    Serial.print("Gravity:");
-    x = event->acceleration.x;
-    y = event->acceleration.y;
-    z = event->acceleration.z;
-  }
-  else {
-    Serial.print("Unk:");
-  }
-
-  Serial.print("\tx= ");
-  Serial.print(x);
-  Serial.print(" |\ty= ");
-  Serial.print(y);
-  Serial.print(" |\tz= ");
-  Serial.println(z);
-}
-*/
