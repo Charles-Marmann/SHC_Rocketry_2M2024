@@ -36,10 +36,11 @@ Servo BRAKE_PWM;
 
 //Sensor assignments and sensor stuff
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
-#define BNO055_SAMPLERATE_DELAY_MS (100)
+#define BNO055_SAMPLERATE_DELAY_MS (10)
 
 Adafruit_BMP3XX bmp;
-int SEALEVELPRESSURE_HPA = 1013.25;
+#define SEALEVELPRESSURE_HPA (1013.25) //Sea level pressure for calculating altitude
+float AltOffset = 0; //Zero altitude
 
 //define BNO055 info functions
 void displaySensorDetails(void);
@@ -53,169 +54,192 @@ void displaySensorOffsets(const adafruit_bno055_offsets_t &calibData);
 int pos = 0;
 
 void setup() {
-//Connect to serial monitor
-BRAKE_PWM.attach(9);
-//pinMode(BRAKE_PWM, OUTPUT);
-if (output_serial) 
-{
-  Serial.begin(115200);
-  while (!Serial) delay(10); //Wait to start communiticating until serial monitor connects
-  delay(5000);
-  Serial.println("Connected to Flight Computer");
-  Serial.println("");
-}
-//Initialize communication busses
-SPI.begin();
-Wire.begin();
+  //initialize motor
+  BRAKE_PWM.writeMicroseconds(500);
+  BRAKE_PWM.attach(9);
+  //pinMode(BRAKE_PWM, OUTPUT);
 
- if (!bno.begin()) { //Display error message if not able to connect to IMU
-    Serial.print("Error: No IMU found on I2C bus");
-    while (1);
-  }
-
- if (!bmp.begin_I2C()) {  //Display error message if not able to connect to Barometer, defautls to I2C mode (what we are using)
-    Serial.println("Error: No Barometer found on I2C bus");
-    while (1);
-  }
- if (!SD.begin(CS_PIN)) { //Display error message if not able to connect to Micro SD card adapter
-    Serial.println("Error: Unable to initialize SD card, no adapter found on SPI bus");
-    while (1); 
-  }
-
-//Add led element
-FastLED.addLeds<NEOPIXEL, LED_PWM>(leds, NUM_LEDS);  //Defaults to GRB color order
-
-//Pressure sensor settings
-bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_2X);
-bmp.setPressureOversampling(BMP3_OVERSAMPLING_16X);
-bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_7);
-bmp.setOutputDataRate(BMP3_ODR_50_HZ);
-
-//Begin BNO055 setup
-
-//Search for BNO055 calibration data
-//romAddress is our current place in ROM
-int romAddress = CALIB_FLASH_OFFSET;
-bool foundCalib = false;
-
-
-adafruit_bno055_offsets_t calibrationData;
-sensor_t sensor;
-
-/*
-*  Look for the sensor's unique ID in ROM.
-*  Isn't foolproof, but it's better than nothing.
-*/
-bno.getSensor(&sensor);
-//i have no idea if this works; goes to the offset in ROM to find the saved sensor ID
-if (*(int32_t *)(XIP_BASE + romAddress) != sensor.sensor_id)
-{
-  Serial.println("\nNo Calibration Data for this sensor exists in ROM");
-  delay(500);
-}
-else
-{
-  Serial.println("\nFound Calibration for this sensor in ROM.");
- 
-  //increment working memory address to the calibration data
-  romAddress += FLASH_PAGE_SIZE;
-  calibrationData = *(adafruit_bno055_offsets_t *)(XIP_BASE + romAddress);
-  
-  displaySensorOffsets(calibrationData);
-
-  Serial.println("\n\nRestoring Calibration data to the BNO055...");
-  bno.setSensorOffsets(calibrationData);
-
-  Serial.println("\n\nCalibration data loaded into BNO055");
-  foundCalib = true;
-}
-
-delay(250);
-
-/* Display some basic information on this sensor */
-displaySensorDetails();
-
-/* Optional: Display current status */
-displaySensorStatus();
-
-//Use external crystal for better accuracy, example code claims this must be done after loading calibration data
-bno.setExtCrystalUse(true);
-
-//complete calibration
-sensors_event_t event;
-bno.getEvent(&event);
-if (!foundCalib)
-{
-  Serial.println("Please Calibrate Sensor: ");
-  while (!bno.isFullyCalibrated())
+  //Connect to serial monitor
+  if (output_serial) 
   {
-    bno.getEvent(&event);
-
-    imu::Vector<3> euler = bno.getQuat().toEuler();
-    
-    double x = euler.y() * degToRad;
-    double y = euler.z() * degToRad;
-    double z = euler.x() * degToRad;
-    
-    Serial.print("X: ");
-    Serial.print(x, 4);
-    Serial.print(" Y: ");
-    Serial.print(y, 4);
-    Serial.print(" Z: ");
-    Serial.print(z, 4);
-    Serial.print("\t\t");
-
-    /* Optional: Display calibration status */
-    displayCalStatus();
-
-    /* New line for the next sample */
+    Serial.begin(115200);
+    while (!Serial) delay(10); //Wait to start communiticating until serial monitor connects
+    delay(250);
+    Serial.println("Connected to Flight Computer");
     Serial.println("");
+  }
+  //Initialize communication busses
+  SPI.begin();
+  Wire.begin();
 
-    /* Wait the specified delay before requesting new data */
+  if (!bno.begin()) { //Display error message if not able to connect to IMU
+      Serial.print("Error: No IMU found on I2C bus");
+      while (1);
+    }
+
+  if (!bmp.begin_I2C()) {  //Display error message if not able to connect to Barometer, defautls to I2C mode (what we are using)
+      Serial.println("Error: No Barometer found on I2C bus");
+      while (1);
+    }
+  if (!SD.begin(CS_PIN)) { //Display error message if not able to connect to Micro SD card adapter
+      Serial.println("Error: Unable to initialize SD card, no adapter found on SPI bus");
+      while (1); 
+    }
+
+  //Add led element
+  FastLED.addLeds<NEOPIXEL, LED_PWM>(leds, NUM_LEDS);  //Defaults to GRB color order
+
+  //Pressure sensor settings
+  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_2X);
+  bmp.setPressureOversampling(BMP3_OVERSAMPLING_16X);
+  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_7);
+  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+
+  //Zero sensor at altitude
+  AltOffset = bmp.readAltitude(SEALEVELPRESSURE_HPA);
+  Serial.print("Zeroed at altitude ");
+  Serial.print(AltOffset);
+  Serial.println(" m");
+
+  //Begin BNO055 setup
+
+  //Search for BNO055 calibration data
+  //romAddress is our current place in ROM
+  int romAddress = CALIB_FLASH_OFFSET;
+  bool foundCalib = false;
+
+
+  adafruit_bno055_offsets_t calibrationData;
+  sensor_t sensor;
+
+  /*
+  *  Look for the sensor's unique ID in ROM.
+  *  Isn't foolproof, but it's better than nothing.
+  */
+  bno.getSensor(&sensor);
+  //i have no idea if this works; goes to the offset in ROM to find the saved sensor ID
+  if (*(int32_t *)(XIP_BASE + romAddress) != sensor.sensor_id)
+  {
+    Serial.println("\nNo Calibration Data for this sensor exists in ROM");
+    delay(500);
+  }
+  else
+  {
+    Serial.println("\nFound Calibration for this sensor in ROM.");
+
+    //increment working memory address to the calibration data
+    romAddress += FLASH_PAGE_SIZE;
+    calibrationData = *(adafruit_bno055_offsets_t *)(XIP_BASE + romAddress);
+    
+    displaySensorOffsets(calibrationData);
+
+    Serial.println("\n\nRestoring Calibration data to the BNO055...");
+    bno.setSensorOffsets(calibrationData);
+
+    Serial.println("\n\nCalibration data loaded into BNO055");
+    foundCalib = true;
+  }
+
+  delay(250);
+
+  /* Display some basic information on this sensor */
+  displaySensorDetails();
+
+  /* Optional: Display current status */
+  displaySensorStatus();
+
+  //Use external crystal for better accuracy, example code claims this must be done after loading calibration data
+  bno.setExtCrystalUse(true);
+
+  //complete calibration
+  sensors_event_t event;
+  bno.getEvent(&event);
+  if (!foundCalib)
+  {
+    Serial.println("Please Calibrate Sensor: ");
+    while (!bno.isFullyCalibrated())
+    {
+      bno.getEvent(&event);
+
+      imu::Vector<3> euler = bno.getQuat().toEuler();
+      
+      double x = euler.y() * degToRad;
+      double y = euler.z() * degToRad;
+      double z = euler.x() * degToRad;
+      
+      Serial.print("X: ");
+      Serial.print(x, 4);
+      Serial.print(" Y: ");
+      Serial.print(y, 4);
+      Serial.print(" Z: ");
+      Serial.print(z, 4);
+      Serial.print("\t\t");
+
+      /* Optional: Display calibration status */
+      displayCalStatus();
+
+      /* New line for the next sample */
+      Serial.println("");
+
+      /* Wait the specified delay before requesting new data */
+      delay(BNO055_SAMPLERATE_DELAY_MS);
+    }
+    }
+
+  Serial.println("\nFully calibrated!");
+  Serial.println("--------------------------------");
+  Serial.println("Calibration Results: ");
+
+  //Get calibration offsets as the offsets data type to display
+  adafruit_bno055_offsets_t newCalib;
+  bno.getSensorOffsets(newCalib);
+  displaySensorOffsets(newCalib);
+  Serial.println("\n\nStoring calibration data to ROM...");
+
+  //There might be a better way to do this than grabbing the offsets twice
+  //Get calibration offsets as array to store
+  uint8_t newCalib_array[22];
+  bno.getSensorOffsets(newCalib_array);
+
+  //back to sensor id location
+  romAddress = CALIB_FLASH_OFFSET;
+  bno.getSensor(&sensor);
+  //turn sensor into an array of uint8_t
+  uint8_t bnoID[FLASH_PAGE_SIZE];
+  bnoID[3] = (uint8_t)sensor.sensor_id;
+  bnoID[2] = (uint8_t)(sensor.sensor_id>>=8);
+  bnoID[1] = (uint8_t)(sensor.sensor_id>>=8);
+  bnoID[0] = (uint8_t)(sensor.sensor_id>>=8);
+
+  //Disable interrupts while writing to ROM
+  uint32_t ints = save_and_disable_interrupts();
+  flash_range_erase (romAddress, FLASH_SECTOR_SIZE);
+  flash_range_program (romAddress, bnoID, FLASH_PAGE_SIZE);
+  //increment
+  romAddress += FLASH_PAGE_SIZE;
+  flash_range_program (romAddress, newCalib_array, FLASH_PAGE_SIZE);
+  restore_interrupts (ints);
+
+  Serial.println("Data stored to ROM.");
+
+  bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
+
+  //End BNO055 Setup
+
+  //Repeatedly check accelerometer and barometer altitude here:
+  sensors_event_t accelerometerData;
+  do {
+    bno.getEvent(&accelerometerData, Adafruit_BNO055::VECTOR_ACCELEROMETER);
+    
+    //print observed acceleration
+    Serial.print("Upwards acceleration: ");
+    Serial.print(accelerometerData.acceleration.y);
+    Serial.println(" m/s^2");
     delay(BNO055_SAMPLERATE_DELAY_MS);
-  }
-  }
 
-Serial.println("\nFully calibrated!");
-Serial.println("--------------------------------");
-Serial.println("Calibration Results: ");
-
-//Get calubration offsets as the offsets data type to display
-adafruit_bno055_offsets_t newCalib;
-bno.getSensorOffsets(newCalib);
-displaySensorOffsets(newCalib);
-Serial.println("\n\nStoring calibration data to ROM...");
-
-//There might be a better way to do this than grabbing the offsets twice
-//Get calibration offsets as array to store
-uint8_t newCalib_array[22];
-bno.getSensorOffsets(newCalib_array);
-
-//back to sensor id location
-romAddress = CALIB_FLASH_OFFSET;
-bno.getSensor(&sensor);
-//turn sensor into an array of uint8_t
-uint8_t bnoID[FLASH_PAGE_SIZE];
-bnoID[3] = (uint8_t)sensor.sensor_id;
-bnoID[2] = (uint8_t)(sensor.sensor_id>>=8);
-bnoID[1] = (uint8_t)(sensor.sensor_id>>=8);
-bnoID[0] = (uint8_t)(sensor.sensor_id>>=8);
-
-//Disable interrupts while writing to ROM
-uint32_t ints = save_and_disable_interrupts();
-flash_range_erase (romAddress, FLASH_SECTOR_SIZE);
-flash_range_program (romAddress, bnoID, FLASH_PAGE_SIZE);
-//increment
-romAddress += FLASH_PAGE_SIZE;
-flash_range_program (romAddress, newCalib_array, FLASH_PAGE_SIZE);
-restore_interrupts (ints);
-
-Serial.println("Data stored to ROM.");
-
-//End BNO055 Setup
-
-//Repeatedly check accelerometer and barometer altitude here:
-
+  } while ((accelerometerData.acceleration.y <= 10) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - AltOffset) <= 10));
+  //
+  Serial.println("Launch Detected!");
 }
 
 void loop() {
@@ -223,7 +247,8 @@ void loop() {
 
 fill_solid(leds, NUM_LEDS, CRGB::Green);  // Fill all LEDs with Green
 FastLED.show(); 
-
+delay(500);
+/*
 for (pos = 0; pos <= 360; pos += 1) { // goes from 0 degrees to 180 degrees
     // in steps of 1 degree
     BRAKE_PWM.write(pos);              // tell servo to go to position in variable 'pos'
@@ -233,10 +258,11 @@ for (pos = 0; pos <= 360; pos += 1) { // goes from 0 degrees to 180 degrees
     BRAKE_PWM.write(pos);              // tell servo to go to position in variable 'pos'
     delay(15);                       // waits 15ms for the servo to reach the position
   }
-
+*/
 
 
 }
+
 
 /**************************************************************************/
 /*
