@@ -13,6 +13,9 @@
 //using serial? turn off for flight
 const bool output_serial = true;
 
+//used for sensor output during calibration
+const double degToRad = 57.295779513;
+
 //SD Card reader stuff:
 #define CS_PIN 17  //Connect Chip Select pin to GPIO 17 on the Pi Pico
 //end of sd card stuff
@@ -37,6 +40,14 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
 
 Adafruit_BMP3XX bmp;
 int SEALEVELPRESSURE_HPA = 1013.25;
+
+//define BNO055 info functions
+void displaySensorDetails(void);
+void displaySensorStatus(void);
+void displayCalStatus(void);
+void displaySensorOffsets(const adafruit_bno055_offsets_t &calibData);
+
+
 //end of sensor stuff
 
 int pos = 0;
@@ -109,7 +120,10 @@ else
   //increment working memory address to the calibration data
   romAddress += FLASH_PAGE_SIZE;
   calibrationData = *(adafruit_bno055_offsets_t *)(XIP_BASE + romAddress);
+  
+  displaySensorOffsets(calibrationData);
 
+  Serial.println("\n\nRestoring Calibration data to the BNO055...");
   bno.setSensorOffsets(calibrationData);
 
   Serial.println("\n\nCalibration data loaded into BNO055");
@@ -117,6 +131,12 @@ else
 }
 
 delay(250);
+
+/* Display some basic information on this sensor */
+displaySensorDetails();
+
+/* Optional: Display current status */
+displaySensorStatus();
 
 //Use external crystal for better accuracy, example code claims this must be done after loading calibration data
 bno.setExtCrystalUse(true);
@@ -126,18 +146,50 @@ sensors_event_t event;
 bno.getEvent(&event);
 if (!foundCalib)
 {
-    Serial.println("Please Calibrate Sensor: ");
-    while (!bno.isFullyCalibrated())
-    {
-        bno.getEvent(&event);
-        delay(BNO055_SAMPLERATE_DELAY_MS);
-    }
-}
+  Serial.println("Please Calibrate Sensor: ");
+  while (!bno.isFullyCalibrated())
+  {
+    bno.getEvent(&event);
+
+    imu::Vector<3> euler = bno.getQuat().toEuler();
+    
+    double x = euler.y() * degToRad;
+    double y = euler.z() * degToRad;
+    double z = euler.x() * degToRad;
+    
+    Serial.print("X: ");
+    Serial.print(x, 4);
+    Serial.print(" Y: ");
+    Serial.print(y, 4);
+    Serial.print(" Z: ");
+    Serial.print(z, 4);
+    Serial.print("\t\t");
+
+    /* Optional: Display calibration status */
+    displayCalStatus();
+
+    /* New line for the next sample */
+    Serial.println("");
+
+    /* Wait the specified delay before requesting new data */
+    delay(BNO055_SAMPLERATE_DELAY_MS);
+  }
+  }
 
 Serial.println("\nFully calibrated!");
-uint8_t newCalib[22];
-bno.getSensorOffsets(newCalib); //Get calibration offsets
+Serial.println("--------------------------------");
+Serial.println("Calibration Results: ");
+
+//Get calubration offsets as the offsets data type to display
+adafruit_bno055_offsets_t newCalib;
+bno.getSensorOffsets(newCalib);
+displaySensorOffsets(newCalib);
 Serial.println("\n\nStoring calibration data to ROM...");
+
+//There might be a better way to do this than grabbing the offsets twice
+//Get calibration offsets as array to store
+uint8_t newCalib_array[22];
+bno.getSensorOffsets(newCalib_array);
 
 //back to sensor id location
 romAddress = CALIB_FLASH_OFFSET;
@@ -155,7 +207,7 @@ flash_range_erase (romAddress, FLASH_SECTOR_SIZE);
 flash_range_program (romAddress, bnoID, FLASH_PAGE_SIZE);
 //increment
 romAddress += FLASH_PAGE_SIZE;
-flash_range_program (romAddress, newCalib, FLASH_PAGE_SIZE);
+flash_range_program (romAddress, newCalib_array, FLASH_PAGE_SIZE);
 restore_interrupts (ints);
 
 Serial.println("Data stored to ROM.");
@@ -168,24 +220,7 @@ Serial.println("Data stored to ROM.");
 
 void loop() {
   // Check calibration of bno055, 3 for each means fully calibrated
-for (int i = 0; i<1; i++) {
-  uint8_t system, gyro, accel, mag = 0;
- bno.getCalibration(&system, &gyro, &accel, &mag);
 
-  // Print calibration status
-  Serial.print("Calibration Status: ");
-  Serial.print("System: ");
-  Serial.print(system);
-  Serial.print(" Gyro: ");
-  Serial.print(gyro);
-  Serial.print(" Accel: ");
-  Serial.print(accel);
-  Serial.print(" Mag: ");
-  Serial.println(mag);
-  //analogWrite(LED_PWM,10);
-}
-
-delay(5000);
 fill_solid(leds, NUM_LEDS, CRGB::Green);  // Fill all LEDs with Green
 FastLED.show(); 
 
@@ -199,18 +234,116 @@ for (pos = 0; pos <= 360; pos += 1) { // goes from 0 degrees to 180 degrees
     delay(15);                       // waits 15ms for the servo to reach the position
   }
 
-//delay(5000); 
-//analogWrite(LED_PWM,200);
-//delay(10000);
-//analogWrite(BRAKE_PWM,200);
-  
-//delay(5000);
-
-//analogWrite(LED_PWM,10);
 
 
 }
 
+/**************************************************************************/
+/*
+    Displays some basic information on this sensor from the unified
+    sensor API sensor_t type (see Adafruit_Sensor for more information)
+    */
+/**************************************************************************/
+void displaySensorDetails(void)
+{
+    sensor_t sensor;
+    bno.getSensor(&sensor);
+    Serial.println("------------------------------------");
+    Serial.print("Sensor:       "); Serial.println(sensor.name);
+    Serial.print("Driver Ver:   "); Serial.println(sensor.version);
+    Serial.print("Unique ID:    "); Serial.println(sensor.sensor_id);
+    Serial.print("Max Value:    "); Serial.print(sensor.max_value); Serial.println(" xxx");
+    Serial.print("Min Value:    "); Serial.print(sensor.min_value); Serial.println(" xxx");
+    Serial.print("Resolution:   "); Serial.print(sensor.resolution); Serial.println(" xxx");
+    Serial.println("------------------------------------");
+    Serial.println("");
+    delay(500);
+}
+
+/**************************************************************************/
+/*
+    Display some basic info about the sensor status
+    */
+/**************************************************************************/
+void displaySensorStatus(void)
+{
+    /* Get the system status values (mostly for debugging purposes) */
+    uint8_t system_status, self_test_results, system_error;
+    system_status = self_test_results = system_error = 0;
+    bno.getSystemStatus(&system_status, &self_test_results, &system_error);
+
+    /* Display the results in the Serial Monitor */
+    Serial.println("");
+    Serial.print("System Status: 0x");
+    Serial.println(system_status, HEX);
+    Serial.print("Self Test:     0x");
+    Serial.println(self_test_results, HEX);
+    Serial.print("System Error:  0x");
+    Serial.println(system_error, HEX);
+    Serial.println("");
+    delay(500);
+}
+
+/**************************************************************************/
+/*
+    Display sensor calibration status
+    */
+/**************************************************************************/
+void displayCalStatus(void)
+{
+    /* Get the four calibration values (0..3) */
+    /* Any sensor data reporting 0 should be ignored, */
+    /* 3 means 'fully calibrated" */
+    uint8_t system, gyro, accel, mag;
+    system = gyro = accel = mag = 0;
+    bno.getCalibration(&system, &gyro, &accel, &mag);
+
+    /* The data should be ignored until the system calibration is > 0 */
+    Serial.print("\t");
+    if (!system)
+    {
+        Serial.print("! ");
+    }
+
+    /* Display the individual values */
+    Serial.print("Sys:");
+    Serial.print(system, DEC);
+    Serial.print(" G:");
+    Serial.print(gyro, DEC);
+    Serial.print(" A:");
+    Serial.print(accel, DEC);
+    Serial.print(" M:");
+    Serial.print(mag, DEC);
+}
+
+/**************************************************************************/
+/*
+    Display the raw calibration offset and radius data
+    */
+/**************************************************************************/
+void displaySensorOffsets(const adafruit_bno055_offsets_t &calibData)
+{
+    Serial.print("Accelerometer: ");
+    Serial.print(calibData.accel_offset_x); Serial.print(" ");
+    Serial.print(calibData.accel_offset_y); Serial.print(" ");
+    Serial.print(calibData.accel_offset_z); Serial.print(" ");
+
+    Serial.print("\nGyro: ");
+    Serial.print(calibData.gyro_offset_x); Serial.print(" ");
+    Serial.print(calibData.gyro_offset_y); Serial.print(" ");
+    Serial.print(calibData.gyro_offset_z); Serial.print(" ");
+
+    Serial.print("\nMag: ");
+    Serial.print(calibData.mag_offset_x); Serial.print(" ");
+    Serial.print(calibData.mag_offset_y); Serial.print(" ");
+    Serial.print(calibData.mag_offset_z); Serial.print(" ");
+
+    Serial.print("\nAccel Radius: ");
+    Serial.print(calibData.accel_radius);
+
+    Serial.print("\nMag Radius: ");
+    Serial.print(calibData.mag_radius);
+}
 
 
 
