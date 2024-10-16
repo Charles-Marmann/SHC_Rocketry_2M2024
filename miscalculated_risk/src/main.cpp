@@ -29,6 +29,14 @@ const double degToRad = 57.295779513;
 
 #define LED_PWM 22
 
+/*Here is what we will use each LED for:
+  D1 [LED at index 0] --> Status/info of Pi Pico, or other 
+  D2 [LED at index 1] --> Status/info of BMP388
+  D3 [LED at index 2] --> Status/info of BNO055
+  D4 [LED at index 3] --> Status/info of Micro SD Card adapter
+
+*/
+
 CRGB leds[NUM_LEDS];
 
 Servo BRAKE_PWM;
