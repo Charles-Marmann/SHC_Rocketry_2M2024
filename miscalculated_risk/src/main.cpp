@@ -13,6 +13,8 @@
 //using serial? turn off for flight
 const bool output_serial = true;
 
+unsigned long loopStart; //time (micros) at beginning of loop, for cycle time calculation
+int loopCount = 0;
 //used for sensor output during calibration
 const double degToRad = 57.295779513;
 
@@ -108,6 +110,8 @@ void setup() {
   Serial.print("Zeroed at altitude ");
   Serial.print(AltOffset);
   Serial.println(" m");
+  
+  delay(100);
 
   //Begin BNO055 setup
 
@@ -125,11 +129,11 @@ void setup() {
   *  Isn't foolproof, but it's better than nothing.
   */
   bno.getSensor(&sensor);
-  //i have no idea if this works; goes to the offset in ROM to find the saved sensor ID
+  //i have no idea if this works; reads value at the offset in ROM to find the saved sensor ID
   if (*(int32_t *)(XIP_BASE + romAddress) != sensor.sensor_id)
   {
     Serial.println("\nNo Calibration Data for this sensor exists in ROM");
-    delay(500);
+    delay(250);
   }
   else
   {
@@ -159,12 +163,18 @@ void setup() {
   //Use external crystal for better accuracy, example code claims this must be done after loading calibration data
   bno.setExtCrystalUse(true);
 
+  bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
+
+  delay(50);
+
   //complete calibration
   sensors_event_t event;
   bno.getEvent(&event);
   if (!foundCalib)
   {
     Serial.println("Please Calibrate Sensor: ");
+
+    //bno.setMode(OPERATION_MODE_NDOF);
     while (!bno.isFullyCalibrated())
     {
       bno.getEvent(&event);
@@ -192,7 +202,7 @@ void setup() {
       /* Wait the specified delay before requesting new data */
       delay(BNO055_SAMPLERATE_DELAY_MS);
     }
-    }
+  }
 
   Serial.println("\nFully calibrated!");
   Serial.println("--------------------------------");
@@ -223,14 +233,16 @@ void setup() {
   uint32_t ints = save_and_disable_interrupts();
   flash_range_erase (romAddress, FLASH_SECTOR_SIZE);
   flash_range_program (romAddress, bnoID, FLASH_PAGE_SIZE);
-  //increment
+  
+  //increment to next flash page
   romAddress += FLASH_PAGE_SIZE;
   flash_range_program (romAddress, newCalib_array, FLASH_PAGE_SIZE);
   restore_interrupts (ints);
 
   Serial.println("Data stored to ROM.");
+  delay(100);
 
-  bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
+  //bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
 
   //End BNO055 Setup
 
@@ -251,12 +263,22 @@ void setup() {
 }
 
 void loop() {
-  // Check calibration of bno055, 3 for each means fully calibrated
+  loopStart = micros();
 
-fill_solid(leds, NUM_LEDS, CRGB::Green);  // Fill all LEDs with Green
-FastLED.show(); 
-delay(500);
+  fill_solid(leds, NUM_LEDS, CRGB::Green);  // Fill all LEDs with Green
+  FastLED.show(); 
+  //delay(500);
 
+  //Sample cycle time of every ten loops
+  if (loopCount >= 9) {
+    loopCount = 0;
+    Serial.print("Cycle time: ");
+    Serial.print(loopStart - micros()); //Delta-t of the loop
+    Serial.println(" microseconds");
+  } 
+  else {
+    loopCount ++;
+  }
 }
 
 
@@ -279,7 +301,7 @@ void displaySensorDetails(void)
     Serial.print("Resolution:   "); Serial.print(sensor.resolution); Serial.println(" xxx");
     Serial.println("------------------------------------");
     Serial.println("");
-    delay(500);
+    delay(100);
 }
 
 /**************************************************************************/
@@ -303,7 +325,7 @@ void displaySensorStatus(void)
     Serial.print("System Error:  0x");
     Serial.println(system_error, HEX);
     Serial.println("");
-    delay(500);
+    delay(100);
 }
 
 /**************************************************************************/
@@ -336,6 +358,7 @@ void displayCalStatus(void)
     Serial.print(accel, DEC);
     Serial.print(" M:");
     Serial.print(mag, DEC);
+    delay(100);
 }
 
 /**************************************************************************/
@@ -365,4 +388,5 @@ void displaySensorOffsets(const adafruit_bno055_offsets_t &calibData)
 
     Serial.print("\nMag Radius: ");
     Serial.print(calibData.mag_radius);
+    delay(100);
 }
