@@ -10,9 +10,6 @@
 #include <utility/imumaths.h>
 #include <hardware/flash.h>
 
-//wait for serial? turn off for flight
-const bool forceSerial = true;
-
 /*
 0 - Startup
 1 - Awaiting launch
@@ -88,16 +85,11 @@ void setup() {
 
   //Connect to serial monitor
   Serial.begin(115200);
-  if (forceSerial) {
-    while (!Serial) delay(10); //Wait to start communiticating until serial monitor connects
-    delay(250);
-  }
-  else{
-    delay(500);
-  }
-
+  while (!Serial) delay(10); //Wait to start communiticating until serial opens
+  delay(250);
   Serial.println("Connected to Flight Computer");
   Serial.println("");
+
   //Initialize communication busses
   SPI.begin();
   Wire.begin();
