@@ -33,7 +33,6 @@ const double degToRad = 57.295779513;
 
 //offset from start of flash memory for BNO055 calibration data
 //we can access this at XIP_BASE + 1024k.
-#define CALIB_FLASH_OFFSET (1024 * 1024)
 
 //Aerobrake and LED pin assignments
 #define NUM_LEDS 4
@@ -128,40 +127,35 @@ void setup() {
   //Begin BNO055 setup
 
   //Search for BNO055 calibration data
-  //romAddress is our current place in ROM
-  int romAddress = CALIB_FLASH_OFFSET;
   bool foundCalib = false;
-
 
   adafruit_bno055_offsets_t calibrationData;
   sensor_t sensor;
-
+  File calibInfo;
   /*
-  *  Look for the sensor's unique ID in ROM.
-  *  Isn't foolproof, but it's better than nothing.
+  *  Check if sensor calibration present.
   */
   bno.getSensor(&sensor);
-  //i have no idea if this works; reads value at the offset in ROM to find the saved sensor ID
-  if (*(int32_t *)(XIP_BASE + romAddress) != sensor.sensor_id)
+  if (!SD.exists("calibration.bin"))
   {
-    Serial.println("\nNo Calibration Data for this sensor exists in ROM");
-    delay(250);
+    Serial.println("No calibration data on SD card");
   }
   else
   {
-    Serial.println("\nFound Calibration for this sensor in ROM.");
+    Serial.println("\nFound Calibration on SD card.");
+    calibInfo = SD.open("calibration.bin");
 
-    //increment working memory address to the calibration data
-    romAddress += FLASH_PAGE_SIZE;
-    calibrationData = *(adafruit_bno055_offsets_t *)(XIP_BASE + romAddress);
-    
+    //read file's bytes and shove into offsets
+    calibInfo.readBytes((char*)&calibrationData, sizeof(calibrationData));
     displaySensorOffsets(calibrationData);
+    calibInfo.close();
 
     Serial.println("\n\nRestoring Calibration data to the BNO055...");
     bno.setSensorOffsets(calibrationData);
 
     Serial.println("\n\nCalibration data loaded into BNO055");
     foundCalib = true;
+    SD.remove("calibration.bin");
   }
 
   delay(250);
@@ -212,7 +206,7 @@ void setup() {
       Serial.println("");
 
       /* Wait the specified delay before requesting new data */
-      delay(BNO055_SAMPLERATE_DELAY_MS);
+      delay(500);
     }
   }
 
@@ -224,41 +218,19 @@ void setup() {
   adafruit_bno055_offsets_t newCalib;
   bno.getSensorOffsets(newCalib);
   displaySensorOffsets(newCalib);
-  Serial.println("\n\nStoring calibration data to ROM...");
 
-  //There might be a better way to do this than grabbing the offsets twice
-  //Get calibration offsets as array to store
-  uint8_t newCalib_array[22];
-  bno.getSensorOffsets(newCalib_array);
-
-  //back to sensor id location
-  romAddress = CALIB_FLASH_OFFSET;
-  bno.getSensor(&sensor);
-  //turn sensor into an array of uint8_t
-  uint8_t bnoID[FLASH_PAGE_SIZE];
-  bnoID[3] = (uint8_t)sensor.sensor_id;
-  bnoID[2] = (uint8_t)(sensor.sensor_id>>=8);
-  bnoID[1] = (uint8_t)(sensor.sensor_id>>=8);
-  bnoID[0] = (uint8_t)(sensor.sensor_id>>=8);
-
-  //Disable interrupts while writing to ROM
-  uint32_t ints = save_and_disable_interrupts();
-  flash_range_erase (romAddress, FLASH_SECTOR_SIZE);
-  flash_range_program (romAddress, bnoID, FLASH_PAGE_SIZE);
-  
-  //increment to next flash page
-  romAddress += FLASH_PAGE_SIZE;
-  flash_range_program (romAddress, newCalib_array, FLASH_PAGE_SIZE);
-  restore_interrupts (ints);
-
-  Serial.println("Data stored to ROM.");
+  //write to file
+  calibInfo = SD.open("calibration.bin", FILE_WRITE);
+  calibInfo.write((char*)&newCalib, sizeof(newCalib));
+  calibInfo.close();
+ 
   delay(100);
 
   //bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
 
   //End BNO055 Setup
 
-  //Repeatedly check accelerometer and barometer altitude here:
+  //Repeatedly check accelerometer and barometer altitude:
   flightState = 1;
   sensors_event_t accelerometerData;
   do {
@@ -266,11 +238,11 @@ void setup() {
     
     //print observed acceleration
     Serial.print("Upwards acceleration: ");
-    Serial.print(accelerometerData.acceleration.y);
+    Serial.print(-accelerometerData.acceleration.y);
     Serial.println(" m/s^2");
     delay(BNO055_SAMPLERATE_DELAY_MS);
 
-  } while ((accelerometerData.acceleration.y <= 10) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - AltOffset) <= 10));
+  } while ((accelerometerData.acceleration.y >= -12) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - AltOffset) <= 10));
 
   flightState = 2;
   Serial.println("Launch Detected!");
@@ -296,7 +268,7 @@ void loop() {
     Serial.println(" microseconds");
   } 
 
-  loopTime = loopStart - micros();
+  loopTime = micros() - loopStart;
 }
 
 
