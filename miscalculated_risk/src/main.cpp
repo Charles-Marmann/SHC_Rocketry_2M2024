@@ -20,7 +20,7 @@
 int flightState = 0;
 
 //time tracking
-unsigned long loopStart; //time (micros) set at beginning of loop, for loop time calculation
+unsigned long loopStart = 0; //time (micros) set at beginning of loop, for loop time calculation
 unsigned long loopTime; //delta-t (micros) calculated at end of loop
 unsigned long timeLoopTimePrinted = 0; //time(micros) set every time the loop time is printed to serial
 
@@ -143,10 +143,10 @@ void setup() {
   else
   {
     Serial.println("\nFound Calibration on SD card.");
-    calibInfo = SD.open("calibration.bin");
+    calibInfo = SD.open("calibration.bin", FILE_READ);
 
     //read file's bytes and shove into offsets
-    calibInfo.readBytes((char*)&calibrationData, sizeof(calibrationData));
+    calibInfo.read((uint8_t *)&calibrationData, sizeof(calibrationData));
     displaySensorOffsets(calibrationData);
     calibInfo.close();
 
@@ -221,7 +221,7 @@ void setup() {
 
   //write to file
   calibInfo = SD.open("calibration.bin", FILE_WRITE);
-  calibInfo.write((char*)&newCalib, sizeof(newCalib));
+  calibInfo.write((uint8_t *)&newCalib, sizeof(newCalib));
   calibInfo.close();
  
   delay(100);
@@ -254,6 +254,7 @@ MAIN LOOP
 
 **************************************************************************/
 void loop() {
+  loopTime = micros() - loopStart;
   loopStart = micros();
 
   fill_solid(leds, NUM_LEDS, CRGB::Green);  // Fill all LEDs with Green
@@ -267,8 +268,6 @@ void loop() {
     Serial.print(loopTime);
     Serial.println(" microseconds");
   } 
-
-  loopTime = micros() - loopStart;
 }
 
 
