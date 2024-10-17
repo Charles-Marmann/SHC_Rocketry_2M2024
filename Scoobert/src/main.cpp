@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
+#include <SD.h>
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BMP3XX.h"
 #include <Adafruit_BNO055.h>
@@ -20,6 +21,8 @@
 // Check I2C device address and correct line below (by default address is 0x29 or 0x28)
 //                                   id, address
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
+File testFile;
+File logFile;
 
 /**************************************************************************/
 /*
@@ -111,17 +114,14 @@ void displayCalStatus(void)
 
 
 
-#define BMP_SCK 13
-#define BMP_MISO 12
-#define BMP_MOSI 11
-#define BMP_CS 10
+//#define BMP_SCK 13
+//#define BMP_MISO 12
+//#define BMP_MOSI 11
+//#define BMP_CS 10
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 
 Adafruit_BMP3XX bmp;
-
-// put function declarations here:
-int myFunction(int, int);
 
 void setup() {
 
@@ -165,7 +165,7 @@ void setup() {
 */
 /**************************************************************************/
 
-Serial.begin(115200);
+Serial.begin(9600);
   while (!Serial);
   Serial.println("Adafruit BMP388 / BMP390 test");
 
@@ -196,19 +196,69 @@ Serial.begin(115200);
 
   Serial.println();
 
+
+  if (!SD.begin(17))
+  {
+    Serial.println("Failed");
+    while(1);
 }
+
+  testFile = SD.open("test.txt", FILE_WRITE);
+
+  if (testFile)
+  {
+    Serial.print("Writing Test");
+    testFile.println("Big Titty Goth Bitches and Dommy Mommies");
+    testFile.close();
+    Serial.println("Done.");
+ } else
+  {
+    Serial.println("Error opening the test file");
+  }
+
+  logFile = SD.open("logfile.txt", FILE_WRITE);
+}
+
 
 /**************************************************************************/
 /*
-  Start BMP setup
+  end BMP setup
 */
 /**************************************************************************/
 
 void loop() {
-  // put your main code here, to run repeatedly:
+  /* Get a new sensor event */ 
+  sensors_event_t event; 
+  bno.getEvent(&event);
+  
+  logFile.print("X: ");
+  logFile.print(event.orientation.x, 4);
+  logFile.print("\tY: ");
+  logFile.print(event.orientation.y, 4);
+  logFile.print("\tZ: ");
+  logFile.print(event.orientation.z, 4);
+  logFile.println("");
+  
+  delay(100);
+  
+  if (! bmp.performReading()) {
+    Serial.println("Failed to perform reading :(");
+    return;
+  }
+  logFile.print("Temperature = ");
+  logFile.print(bmp.temperature);
+  logFile.println(" *C");
+
+  logFile.print("Pressure = ");
+  logFile.print(bmp.pressure / 100.0);
+  logFile.println(" hPa");
+
+  logFile.print("Approx. Altitude = ");
+  logFile.print(bmp.readAltitude(1013.25));
+  logFile.println(" m");
+
+  logFile.println();
+  delay(2000);
 }
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
-}
+  // put your main code here, to run repeatedly:
