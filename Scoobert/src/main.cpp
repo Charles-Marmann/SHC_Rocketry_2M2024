@@ -215,8 +215,6 @@ Serial.begin(9600);
   {
     Serial.println("Error opening the test file");
   }
-
-  logFile = SD.open("logfile.txt", FILE_WRITE);
 }
 
 
@@ -226,39 +224,76 @@ Serial.begin(9600);
 */
 /**************************************************************************/
 
-void loop() {
+//void loop() {
+  //logFile = SD.open("logfile.txt", FILE_WRITE);
+ // if (logFile)
+ // {
   /* Get a new sensor event */ 
-  sensors_event_t event; 
-  bno.getEvent(&event);
+  //sensors_event_t event; 
+ // bno.getEvent(&event);
   
-  logFile.print("X: ");
-  logFile.print(event.orientation.x, 4);
-  logFile.print("\tY: ");
-  logFile.print(event.orientation.y, 4);
-  logFile.print("\tZ: ");
-  logFile.print(event.orientation.z, 4);
-  logFile.println("");
+ // logFile << event.orientation.x << " " << event.orientation.y << " " << event.orientation.z;
+ // OUTPUT = std::to_string(event.orientation.x) + " " + std::to_string(event.orientation.y) + " " + std::to_string(event.orientation.z);
+ // logFile << std::endl;
   
-  delay(100);
+  //delay(100);
   
-  if (! bmp.performReading()) {
-    Serial.println("Failed to perform reading :(");
-    return;
+  //if (! bmp.performReading()) {
+  //  Serial.println("Failed to perform reading :(");
+  //  return;
+  //}
+ // logFile.print("Temperature = ");
+ // logFile.print(bmp.temperature);
+  //logFile.println(" *C");
+
+  //logFile.print("Pressure = ");
+  //logFile.print(bmp.pressure / 100.0);
+ // logFile.println(" hPa");
+
+ // logFile.print("Approx. Altitude = ");
+ // logFile.print(bmp.readAltitude(1013.25));
+ // logFile.println(" m");
+
+  //logFile.println();
+ // logFile.close();
+ // delay(2000);
+ // }
+//}
+
+void loop() {
+  logFile = SD.open("logfile.csv", FILE_WRITE);  // Change filename to .csv
+  if (logFile) {
+    /* Get a new sensor event */ 
+    sensors_event_t event; 
+    bno.getEvent(&event);
+
+    // Log orientation data in CSV format
+    logFile.print(event.orientation.x);
+    logFile.print(",");  // Add comma as separator
+    logFile.print(event.orientation.y);
+    logFile.print(",");  // Add comma as separator
+    logFile.print(event.orientation.z);
+    logFile.print(",");  // Add comma for next field (temperature)
+    
+    // Read BMP data
+    if (!bmp.performReading()) {
+      Serial.println("Failed to perform reading :(");
+      logFile.close(); // Ensure to close logFile if reading fails
+      return;
+    }
+
+    // Log temperature, pressure, and altitude in CSV format
+    logFile.print(bmp.temperature);
+    logFile.print(",");  // Add comma as separator
+    logFile.print(bmp.pressure / 100.0);
+    logFile.print(",");  // Add comma as separator
+    logFile.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
+    logFile.println();  // End the line
+
+    logFile.close(); // Always close the file when done
+  } else {
+    Serial.println("Error opening the logfile");
   }
-  logFile.print("Temperature = ");
-  logFile.print(bmp.temperature);
-  logFile.println(" *C");
 
-  logFile.print("Pressure = ");
-  logFile.print(bmp.pressure / 100.0);
-  logFile.println(" hPa");
-
-  logFile.print("Approx. Altitude = ");
-  logFile.print(bmp.readAltitude(1013.25));
-  logFile.println(" m");
-
-  logFile.println();
-  delay(2000);
+  delay(100); //logs the data every 100 milliseconds, subject to change
 }
-
-  // put your main code here, to run repeatedly:
