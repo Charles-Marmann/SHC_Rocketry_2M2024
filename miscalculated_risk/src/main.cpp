@@ -8,7 +8,6 @@
 #include <Adafruit_BNO055.h>
 #include "Adafruit_BMP3XX.h"
 #include <utility/imumaths.h>
-#include <hardware/flash.h>
 
 /*
 0 - Startup
@@ -20,9 +19,9 @@
 int flightState = 0;
 
 //time tracking
-unsigned long loopStart = 0; //time (micros) set at beginning of loop, for loop time calculation
-unsigned long loopTime; //delta-t (micros) calculated at end of loop
-unsigned long timeLoopTimePrinted = 0; //time(micros) set every time the loop time is printed to serial
+unsigned long loopStart = 0; //time (millis) set at beginning of loop, for loop time calculation
+unsigned long loopTime; //delta-t (millis) calculated at end of loop
+unsigned long timeLoopTimePrinted = 0; //time(millis) set every time the loop time is printed to serial
 
 //used for sensor output during calibration
 const double degToRad = 57.295779513;
@@ -77,6 +76,7 @@ SETUP LOOP
 
 **************************************************************************/
 void setup() {
+
   //initialize motor
   BRAKE_PWM.writeMicroseconds(500);
   BRAKE_PWM.attach(9);
@@ -94,7 +94,7 @@ void setup() {
   Wire.begin();
 
   if (!bno.begin()) { //Display error message if not able to connect to IMU
-      Serial.print("Error: No IMU found on I2C bus");
+      Serial.println("Error: No IMU found on I2C bus");
       while (1);
     }
 
@@ -109,7 +109,20 @@ void setup() {
 
   //Add led element
   FastLED.addLeds<NEOPIXEL, LED_PWM>(leds, NUM_LEDS);  //Defaults to GRB color order
+  FastLED.setBrightness(127);
+  //LED test
+  leds[0] = CRGB(255,0,0);
+  leds[1] = CRGB(0,255,0);
+  leds[2] = CRGB(0,0,255);
+  leds[3] = CRGB(255,255,255);
+  FastLED.show();  
+  delay(1000);
 
+  for (int i = 0; i <= 3; i++) {
+    leds[i] = CRGB(0,0,0);
+  }
+  FastLED.show();
+  
   //Pressure sensor settings
   bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_2X);
   bmp.setPressureOversampling(BMP3_OVERSAMPLING_16X);
@@ -169,9 +182,7 @@ void setup() {
   //Use external crystal for better accuracy, example code claims this must be done after loading calibration data
   bno.setExtCrystalUse(true);
 
-  bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
-
-  delay(50);
+  //bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
 
   //complete calibration
   sensors_event_t event;
@@ -226,7 +237,9 @@ void setup() {
  
   delay(100);
 
-  //bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
+  bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
+
+  delay(50);
 
   //End BNO055 Setup
 
@@ -254,19 +267,19 @@ MAIN LOOP
 
 **************************************************************************/
 void loop() {
-  loopTime = micros() - loopStart;
-  loopStart = micros();
+  loopTime = millis() - loopStart;
+  loopStart = millis();
 
   fill_solid(leds, NUM_LEDS, CRGB::Green);  // Fill all LEDs with Green
   FastLED.show(); 
   //delay(500);
 
   //Print loop time every half a second
-  if ((micros() - timeLoopTimePrinted) >= (500 * 1000)) {
-    timeLoopTimePrinted = micros();
+  if ((millis() - timeLoopTimePrinted) >= (500 * 1000)) {
+    timeLoopTimePrinted = millis();
     Serial.print("Loop time: ");
     Serial.print(loopTime);
-    Serial.println(" microseconds");
+    Serial.println(" milliseconds");
   } 
 }
 
@@ -376,6 +389,6 @@ void displaySensorOffsets(const adafruit_bno055_offsets_t &calibData)
     Serial.print(calibData.accel_radius);
 
     Serial.print("\nMag Radius: ");
-    Serial.print(calibData.mag_radius);
+    Serial.println(calibData.mag_radius);
     delay(100);
 }
