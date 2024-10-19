@@ -43,7 +43,7 @@ const double degToRad = 57.295779513;
   D2 [LED at index 1] --> Status/info of BMP388
   D3 [LED at index 2] --> Status/info of BNO055
   D4 [LED at index 3] --> Status/info of Micro SD Card adapter
-
+    Yellow: calibration file not found
 */
 
 CRGB leds[NUM_LEDS];
@@ -84,45 +84,59 @@ void setup() {
 
   //Connect to serial monitor
   Serial.begin(115200);
-  while (!Serial) delay(10); //Wait to start communiticating until serial opens
+  //while (!Serial) delay(10); //Wait to start communiticating until serial opens
   delay(250);
   Serial.println("Connected to Flight Computer");
   Serial.println("");
-
+  
+  //Add led element
+  FastLED.addLeds<NEOPIXEL, LED_PWM>(leds, NUM_LEDS);  //Defaults to GRB color order
+  FastLED.setBrightness(100);
+  //LED test
+  leds[0] = CRGB(255,0,0);
+  leds[1] = CRGB(255,0,0);
+  leds[2] = CRGB(255,0,0);
+  leds[3] = CRGB(255,0,0);
+  FastLED.show(); 
+  delay(300);
+  leds[0] = CRGB(0,255,0);
+  leds[1] = CRGB(0,255,0);
+  leds[2] = CRGB(0,255,0);
+  leds[3] = CRGB(0,255,0);
+  FastLED.show(); 
+  delay(300);
+  leds[0] = CRGB(0,0,255);
+  leds[1] = CRGB(0,0,255);
+  leds[2] = CRGB(0,0,255);
+  leds[3] = CRGB(0,0,255);
+  FastLED.show(); 
+  delay(1000);
+  for (int i = 0; i <= 3; i++) {
+    leds[i] = CRGB(0,0,0);
+  }
+  FastLED.show();
   //Initialize communication busses
   SPI.begin();
   Wire.begin();
 
   if (!bno.begin()) { //Display error message if not able to connect to IMU
       Serial.println("Error: No IMU found on I2C bus");
+      leds[2] = CRGB(255,0,0);
       while (1);
     }
 
   if (!bmp.begin_I2C()) {  //Display error message if not able to connect to Barometer, defautls to I2C mode (what we are using)
       Serial.println("Error: No Barometer found on I2C bus");
+      leds[1] = CRGB(255,0,0);
       while (1);
     }
   if (!SD.begin(CS_PIN)) { //Display error message if not able to connect to Micro SD card adapter
       Serial.println("Error: Unable to initialize SD card, no adapter found on SPI bus");
+      leds[3] = CRGB(255,0,0);
+      FastLED.show();
       while (1); 
     }
 
-  //Add led element
-  FastLED.addLeds<NEOPIXEL, LED_PWM>(leds, NUM_LEDS);  //Defaults to GRB color order
-  FastLED.setBrightness(127);
-  //LED test
-  leds[0] = CRGB(255,0,0);
-  leds[1] = CRGB(0,255,0);
-  leds[2] = CRGB(0,0,255);
-  leds[3] = CRGB(255,255,255);
-  FastLED.show();  
-  delay(1000);
-
-  for (int i = 0; i <= 3; i++) {
-    leds[i] = CRGB(0,0,0);
-  }
-  FastLED.show();
-  
   //Pressure sensor settings
   bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_2X);
   bmp.setPressureOversampling(BMP3_OVERSAMPLING_16X);
@@ -152,6 +166,8 @@ void setup() {
   if (!SD.exists("calibration.bin"))
   {
     Serial.println("No calibration data on SD card");
+    leds[2] = CRGB(255,255,0);
+    FastLED.show();  
   }
   else
   {
@@ -234,12 +250,19 @@ void setup() {
   calibInfo = SD.open("calibration.bin", FILE_WRITE);
   calibInfo.write((uint8_t *)&newCalib, sizeof(newCalib));
   calibInfo.close();
- 
+  Serial.println("Saved calibration data to SD card");
   delay(100);
 
   bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
 
   delay(50);
+
+  leds[0] = CRGB(0,255,0);
+  leds[1] = CRGB(0,255,0);
+  leds[2] = CRGB(0,255,0);
+  leds[3] = CRGB(0,255,0);
+  FastLED.show(); 
+  delay(1000);
 
   //End BNO055 Setup
 
@@ -255,10 +278,12 @@ void setup() {
     Serial.println(" m/s^2");
     delay(BNO055_SAMPLERATE_DELAY_MS);
 
-  } while ((accelerometerData.acceleration.y >= -12) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - AltOffset) <= 10));
+  } while ((accelerometerData.acceleration.y >= -20) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - AltOffset) <= 10));
 
   flightState = 2;
   Serial.println("Launch Detected!");
+  fill_solid(leds, NUM_LEDS, CRGB(160, 43, 147));  // Fill all LEDs with Purple
+  FastLED.show();
 }
 
 /**************************************************************************
@@ -270,10 +295,8 @@ void loop() {
   loopTime = millis() - loopStart;
   loopStart = millis();
 
-  fill_solid(leds, NUM_LEDS, CRGB::Green);  // Fill all LEDs with Green
-  FastLED.show(); 
   //delay(500);
-
+  
   //Print loop time every half a second
   if ((millis() - timeLoopTimePrinted) >= (500 * 1000)) {
     timeLoopTimePrinted = millis();
