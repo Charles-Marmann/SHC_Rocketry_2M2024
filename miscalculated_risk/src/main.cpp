@@ -89,7 +89,7 @@ Adafruit_BMP3XX bmp;
 float AltOffset = 0; //Zero altitude
 #define AEROBRAKE_DEPLOY (800) //Altitude at which to deploy aerobrakes
 
-float altIndex[3]; //New altitude indexed in every 5 seconds after launch
+float altIndex[3] = {0, 0, 0}; //New altitude indexed in every 5 seconds after launch
 
 //define BNO055 info functions
 void displaySensorDetails(void);
@@ -191,7 +191,7 @@ void setup() {
   csvName = getCSVName(0);
   if (csvName == 0) {
     leds[3] = CRGB(255,0,0);
-    Serial.println("\nMemory initialization error while trying to find a CSV file name");
+    Serial.println("\nMemory allocation error while trying to find a CSV file name");
     Serial.println("How many fucking times did you run this thing");
     while(1);
   }
@@ -399,6 +399,7 @@ void loop() {
   //Aerobrake Deploy
   if ((flightState == 2) && (bmp.readAltitude(SEALEVELPRESSURE_HPA) >= AEROBRAKE_DEPLOY)) {
     flightState = 3;
+    Serial.println("\nAt altitude, aerobrakes deployed");
     BRAKE_PWM.writeMicroseconds(2500);
     fill_solid(leds, NUM_LEDS, CRGB(255, 100, 0));
     FastLED.show();
@@ -408,6 +409,7 @@ void loop() {
   //Index new altitude every five seconds
   if ((millis() - altIndexTimer) >= 5000) {
     altIndexTimer = millis();
+    //somewhat excessive for shifting two values but it's scaleable so whatever
     for (int i = 1; i >= 0; i--) {
       altIndex[i+1] = altIndex[i];
     }
@@ -417,8 +419,11 @@ void loop() {
   if (
     (max(altIndex[0],max(altIndex[1], altIndex[2])) 
     - min(altIndex[0],min(altIndex[1], altIndex[2]))) <= 10)
-    {
+    {    
     flightState = 4;
+    Serial.print("\nDetected landing at ");
+    Serial.print(altIndex[0]);
+    Serial.println(" meters");
     fill_solid(leds, NUM_LEDS, CRGB(0, 0, 255));
     FastLED.show();
   }
@@ -474,15 +479,14 @@ void loop() {
     }
     else {
       leds[3] = CRGB(255, 0, 0);
-      Serial.println("CSV file open fail");
+      Serial.println("\nFailed to open CSV file");
     }
   }
-  
   //Print average loop time every half a second
   if ((millis() - loopPrintTimer) >= (500)) {
     loopTime = (millis() - loopPrintTimer)/loopsElapsed;
     loopPrintTimer = millis();
-    Serial.print("Loop time: ");
+    Serial.print("\nLoop time: ");
     Serial.print(loopTime);
     Serial.println(" milliseconds");
   }
@@ -494,7 +498,7 @@ e.g. i=0 and data0.csv data7.csv are already present, returns data8.csv
 
 Returns 0 if allocation fails*/
 char * getCSVName(unsigned int i) {
-  //String conversion
+  //convert int to ASCII
   int mag1 = i;
   int mag2 = i;
   int len = 0;
@@ -515,17 +519,17 @@ char * getCSVName(unsigned int i) {
   char datastr[] = "data";
   char csvstr[] = ".csv";
   
+  //Allocate memory for filename
   size_t strlength = 9 + len; //Length of string is 4 (data) + decimal length of number + 5 (.csv\0)
-  //allocate memory for filename
-  char *filename = (char *) malloc(strlength * sizeof(char));
+  char *filename = (char *) malloc(strlength);
   if (filename == NULL) return 0; //null pointer means something is fucked
 
-  //glue string together and test
+  //Glue string together and test
   strcpy(filename, datastr); //Don't use strcat here becuase it's not initialized yet
   strcat(filename, istr);
   strcat(filename, csvstr);
   if (SD.exists(filename)) {
-    //Don't need this in memory anymore because it doesn't work
+    //filename would overwrite existing file, free the memory and try the next one
     free(filename);
     //Try next one
     return getCSVName(i + 1);
