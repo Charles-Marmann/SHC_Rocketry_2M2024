@@ -43,7 +43,9 @@ const double degToRad = 57.295779513;
   D2 [LED at index 1] --> Status/info of BMP388
   D3 [LED at index 2] --> Status/info of BNO055
   D4 [LED at index 3] --> Status/info of Micro SD Card adapter
-    Yellow: calibration file not found
+    Green:  OK
+    Yellow: Awaiting calibration
+    Red:    Fucked
 */
 
 CRGB leds[NUM_LEDS];
@@ -65,9 +67,10 @@ void displaySensorStatus(void);
 void displayCalStatus(void);
 void displaySensorOffsets(const adafruit_bno055_offsets_t &calibData);
 
-
+bool allButMagCalibrated();
+bool calibOnSD = true;
+bool badSensorComms = false;
 //end of sensor stuff
-
 int pos = 0;
 
 /**************************************************************************
@@ -76,7 +79,6 @@ SETUP LOOP
 
 **************************************************************************/
 void setup() {
-
   //initialize motor
   BRAKE_PWM.writeMicroseconds(500);
   BRAKE_PWM.attach(9);
@@ -85,13 +87,13 @@ void setup() {
   //Connect to serial monitor
   Serial.begin(115200);
   //while (!Serial) delay(10); //Wait to start communiticating until serial opens
-  delay(250);
+  delay(2000);
   Serial.println("Connected to Flight Computer");
   Serial.println("");
   
   //Add led element
   FastLED.addLeds<NEOPIXEL, LED_PWM>(leds, NUM_LEDS);  //Defaults to GRB color order
-  FastLED.setBrightness(100);
+  FastLED.setBrightness(25);
   //LED test
   leds[0] = CRGB(255,0,0);
   leds[1] = CRGB(255,0,0);
@@ -110,33 +112,49 @@ void setup() {
   leds[2] = CRGB(0,0,255);
   leds[3] = CRGB(0,0,255);
   FastLED.show(); 
-  delay(1000);
-  for (int i = 0; i <= 3; i++) {
-    leds[i] = CRGB(0,0,0);
-  }
+  delay(300);
+  FastLED.clear();
   FastLED.show();
   //Initialize communication busses
   SPI.begin();
   Wire.begin();
-
-  if (!bno.begin()) { //Display error message if not able to connect to IMU
-      Serial.println("Error: No IMU found on I2C bus");
-      leds[2] = CRGB(255,0,0);
-      while (1);
-    }
-
-  if (!bmp.begin_I2C()) {  //Display error message if not able to connect to Barometer, defautls to I2C mode (what we are using)
+  do {
+    delay(50);
+    if (!bmp.begin_I2C()) {  //Display error message if not able to connect to Barometer, defautls to I2C mode (what we are using)
       Serial.println("Error: No Barometer found on I2C bus");
       leds[1] = CRGB(255,0,0);
-      while (1);
+      badSensorComms = true;
     }
-  if (!SD.begin(CS_PIN)) { //Display error message if not able to connect to Micro SD card adapter
+    else leds[1] = CRGB(0,255,0);
+    FastLED.show();
+    delay(50);
+
+    if (!bno.begin()) { //Display error message if not able to connect to IMU
+      Serial.println("Error: No IMU found on I2C bus");
+      leds[2] = CRGB(255,0,0);
+      badSensorComms = true;
+    }
+    else leds[2] = CRGB(255,240,0);
+    FastLED.show();
+    delay(50);
+
+    if (!SD.begin(CS_PIN)) { //Display error message if not able to connect to Micro SD card adapter
       Serial.println("Error: Unable to initialize SD card, no adapter found on SPI bus");
       leds[3] = CRGB(255,0,0);
-      FastLED.show();
-      while (1); 
+      badSensorComms = true;
     }
-
+    else leds[3] = CRGB(0,255,0);
+    FastLED.show();
+    delay(50);
+    
+    if (SD.begin(CS_PIN) && bmp.begin_I2C() && bno.begin()) {
+      badSensorComms = false;
+      leds[1] = CRGB(0,255,0);
+      leds[2] = CRGB(255,240,0);
+      leds[3] = CRGB(0,255,0);
+    }
+    FastLED.show();
+  } while (badSensorComms); //Check through all sensors once, if there's a problem keep checking
   //Pressure sensor settings
   bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_2X);
   bmp.setPressureOversampling(BMP3_OVERSAMPLING_16X);
@@ -153,38 +171,66 @@ void setup() {
 
   //Begin BNO055 setup
 
-  //Search for BNO055 calibration data
-  bool foundCalib = false;
+  //BNO055 calibration
 
   adafruit_bno055_offsets_t calibrationData;
-  sensor_t sensor;
   File calibInfo;
+  bool foundCalib = false;
   /*
   *  Check if sensor calibration present.
   */
-  bno.getSensor(&sensor);
   if (!SD.exists("calibration.bin"))
   {
     Serial.println("No calibration data on SD card");
-    leds[2] = CRGB(255,255,0);
-    FastLED.show();  
+    calibOnSD = false;
   }
   else
   {
     Serial.println("\nFound Calibration on SD card.");
     calibInfo = SD.open("calibration.bin", FILE_READ);
+    if (calibInfo) {
+      //read file's bytes and shove into offsets
+      int calibBytesRead = calibInfo.read((uint8_t *)&calibrationData, sizeof(calibrationData)); //Returns # of bytes read, or -1 if error
+      if (calibBytesRead == sizeof(calibrationData)) {
+        displaySensorOffsets(calibrationData);
+        calibInfo.close();
 
-    //read file's bytes and shove into offsets
-    calibInfo.read((uint8_t *)&calibrationData, sizeof(calibrationData));
-    displaySensorOffsets(calibrationData);
-    calibInfo.close();
+        Serial.println("Restoring Calibration data to the BNO055...");
+        bno.setSensorOffsets(calibrationData);
+        Serial.println("Calibration data loaded into BNO055");
+        foundCalib = true;
+        delay(100);
 
-    Serial.println("\n\nRestoring Calibration data to the BNO055...");
-    bno.setSensorOffsets(calibrationData);
-
-    Serial.println("\n\nCalibration data loaded into BNO055");
-    foundCalib = true;
-    SD.remove("calibration.bin");
+        //Display new offsets for verification
+        adafruit_bno055_offsets_t newData;
+        Serial.println("Offsets currently on sensor:");
+        if (bno.getSensorOffsets(newData)) {
+          displaySensorOffsets(newData);
+          delay(500); //Allow operator to verify offsets are the same
+        }
+        else {
+          Serial.println("Failed to read new offsets");
+        }
+      }
+      else if (calibBytesRead == -1){ //Error while reading calibration data
+        Serial.println("Calibration data read failed");
+        leds[3] = CRGB(255,0,0);
+        FastLED.show();
+      }
+      else { //Mismatch of data bytes read
+        Serial.print("Only read ");
+        Serial.print(calibBytesRead);
+        Serial.print(" bytes out of ");
+        Serial.println(sizeof(calibrationData));
+        leds[3] = CRGB(255,0,0);
+        FastLED.show();
+      }
+    }
+    else { //File open error
+      Serial.println("Calibration data open failed");
+      leds[3] = CRGB(255,0,0);
+      FastLED.show();
+    }
   }
 
   delay(250);
@@ -198,20 +244,22 @@ void setup() {
   //Use external crystal for better accuracy, example code claims this must be done after loading calibration data
   bno.setExtCrystalUse(true);
 
-  //bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
+  bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
 
   //complete calibration
   sensors_event_t event;
-  bno.getEvent(&event);
-  if (!foundCalib)
-  {
+  if (!foundCalib) {
+    leds[2] = CRGB(255,200,0);
+    FastLED.show();
     Serial.println("Please Calibrate Sensor: ");
 
     //bno.setMode(OPERATION_MODE_NDOF);
-    while (!bno.isFullyCalibrated())
+
+    while (!allButMagCalibrated())
     {
       bno.getEvent(&event);
 
+      //Get quaternions and convert to euler angles for better accuracy
       imu::Vector<3> euler = bno.getQuat().toEuler();
       
       double x = euler.y() * degToRad;
@@ -236,24 +284,41 @@ void setup() {
       delay(500);
     }
   }
+  
 
-  Serial.println("\nFully calibrated!");
-  Serial.println("--------------------------------");
-  Serial.println("Calibration Results: ");
 
   //Get calibration offsets as the offsets data type to display
-  adafruit_bno055_offsets_t newCalib;
-  bno.getSensorOffsets(newCalib);
-  displaySensorOffsets(newCalib);
+  if(!calibOnSD) {
+    Serial.println("\nFully calibrated!");
+    Serial.println("--------------------------------");
+    Serial.println("Calibration Results: ");
 
-  //write to file
-  calibInfo = SD.open("calibration.bin", FILE_WRITE);
-  calibInfo.write((uint8_t *)&newCalib, sizeof(newCalib));
-  calibInfo.close();
-  Serial.println("Saved calibration data to SD card");
-  delay(100);
-
-  bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
+    adafruit_bno055_offsets_t newCalib;
+    if (bno.getSensorOffsets(newCalib)) {
+      displaySensorOffsets(newCalib);
+      //write to file
+      calibInfo = SD.open("calibration.bin", FILE_WRITE);
+      if (calibInfo) {
+        calibInfo.write((uint8_t *)&newCalib, sizeof(newCalib));
+        calibInfo.close();
+        Serial.println("Saved calibration data to SD card");
+        delay(100);
+      }
+      else {
+        Serial.println("SD card write failure, offsets may be borked!");
+        leds[3] = CRGB(255,0,0);
+        FastLED.show();
+        delay(2000);
+      }
+    }
+    else {
+      Serial.println("Offset retrieval failure; cannot save offsets");
+      leds[3] = CRGB(255,0,0);
+      FastLED.show();
+      delay(2000);
+    }
+  }
+  //bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
 
   delay(50);
 
@@ -296,9 +361,9 @@ void loop() {
   loopStart = millis();
 
   //delay(500);
-  
+
   //Print loop time every half a second
-  if ((millis() - timeLoopTimePrinted) >= (500 * 1000)) {
+  if ((millis() - timeLoopTimePrinted) >= (500)) {
     timeLoopTimePrinted = millis();
     Serial.print("Loop time: ");
     Serial.print(loopTime);
@@ -306,6 +371,12 @@ void loop() {
   } 
 }
 
+//Check relevant calibration
+bool allButMagCalibrated() {
+  uint8_t system, gyro, accel, mag;
+  bno.getCalibration(&system, &gyro, &accel, &mag);
+  return (system == 3) && (gyro == 3) && (accel == 3);
+}
 
 /**************************************************************************/
 /*
