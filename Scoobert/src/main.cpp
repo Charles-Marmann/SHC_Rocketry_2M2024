@@ -224,10 +224,19 @@ Serial.begin(9600);
   {
     Serial.println("Error opening the test file");
   }
+
   myservo.attach(9); 
+
+
+
 }
 
-
+// Function to simulate altitude reading
+float readAltitude() {
+    // Replace this with actual sensor reading code
+    // For example, use analogRead() or a library function to get the altitude
+    return random(0, 1000);  // Simulated altitude (0 to 1000 meters)
+}
 
  
 /**************************************************************************/
@@ -247,9 +256,30 @@ void loop() {
   val = analogRead(potpin);            // reads the value of the potentiometer (value between 0 and 1023)
   val = map(val, 0, 1023, 0, 180);     // scale it for use with the servo (value between 0 and 180)
   myservo.write(val);                  // sets the servo position according to the scaled value
-  delay(15);                           // waits for the servo to get there
+  delay(15);   
+  myservo.write(100);
+  delay(10);// waits for the servo to get there
 }
 
+void loop2() {
+    static float maxAltitude = 0; // Variable to store the maximum altitude
+    float currentAltitude = readAltitude(); // Get the current altitude
+
+    // Check if the current altitude is greater than the maximum recorded altitude
+    if (currentAltitude > maxAltitude) {
+        maxAltitude = currentAltitude; // Update max altitude
+    }
+
+    Serial.print("Current Altitude: ");
+    Serial.print(currentAltitude);
+    Serial.print(" m, Max Altitude: ");
+    Serial.print(maxAltitude);
+    Serial.println(" m");
+}
+
+//
+// code that we won't use unless things change
+//
 //void loop() {
   //logFile = SD.open("logfile.txt", FILE_WRITE);
  // if (logFile)
@@ -286,7 +316,7 @@ void loop() {
  // }
 //}
 
-void loop2() {
+void loop3() {
   logFile = SD.open("logfile.csv", FILE_WRITE);  // Change filename to .csv
   if (logFile) {
     /* Get a new sensor event */ 
@@ -323,3 +353,5 @@ void loop2() {
 
   delay(100); //logs the data every 100 milliseconds, subject to change
 }
+
+
