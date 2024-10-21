@@ -22,17 +22,14 @@ int flightState = 0;
 int loopsElapsed = 0; //# of loops executed since loopTime measured
 
 unsigned long loopStartTime = 0; //time (millis) set at beginning of loop, for loop time calculation
-
 unsigned long loopTime; //delta-t (millis) calculated at end of loop
-
 unsigned long loopPrintTimer = 0; //time (millis) set every time the loop time is printed to serial
 
 unsigned long launchTime; //time (millis) set once launch detected
-
 unsigned long logTime; //time (millis) set on each sensor read
-
 unsigned long altIndexTimer; //time (milllis) set every time a new altitude is indexed for land detect
 
+unsigned long fileSaveTimer; //time (millis) since last file save
 
 //used for sensor output during calibration
 const double degToRad = 57.295779513;
@@ -45,12 +42,15 @@ char *getCSVName(unsigned int i);
 /* CSV file format: comma delineated
 each term in a row is separated by a comma and each row is separated by a newline character (\n)
 
-Note: need to swap some values around as the bno055 +z is different from rocket up
-Following right hand rule, rocket z is sensor -y, rocket y is sensor z, x is the same
+Note: need to swap some values around as the bno055 coordinate axes are different
+Following right hand rule, for orientation from quaternion: rocket x is sensor y, rocket y is sensor -z, rocket z is sensor x
+For vectors: rocket x is sensor z, rocket y is sensor -x, rocket z is sensor -y
+rocket x is pointing perpendicular to the board, front face, rocket z is straight up
+
 Data: time, alt, x accel, y accel, z accel, x angle, y angle, z angle, x angvel, y angvel, z angvel, pressure, temp
 */
 File dataFile;
-const char headerString[] = "time (ms),altitude (m),xaccel (m/s^2),yaccel (m/s^2),zaccel (m/s^2),xangle (deg),yangle (deg),zangle (deg),xangvel (dps),yangvel (dps),zangvel (dps),pressure (Pa),temperature (deg)";
+const char headerString[] = "time (ms),altitude (m),xaccel (m/s^2),yaccel (m/s^2),zaccel (m/s^2),xangle (deg),yangle (deg),zangle (deg),xangvel (dps),yangvel (dps),zangvel (dps),pressure (Pa),temperature (deg C)";
 void comma() {
   dataFile.print(',');
   }
@@ -82,14 +82,14 @@ Servo BRAKE_PWM;
 
 //Sensor assignments and sensor stuff
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
-#define SENSOR_SAMPLE_PERIOD (10)
+#define SENSOR_SAMPLE_MIN_DELAY (10)
 
 Adafruit_BMP3XX bmp;
 #define SEALEVELPRESSURE_HPA (1013.25) //Sea level pressure for calculating altitude
-float AltOffset = 0; //Zero altitude
+float altOffset; //Zero altitude
 #define AEROBRAKE_DEPLOY (800) //Altitude at which to deploy aerobrakes
 
-float altIndex[3] = {0, 0, 0}; //New altitude indexed in every 5 seconds after launch
+float altIndex[3]; //New altitude indexed in every 5 seconds after launch
 
 //define BNO055 info functions
 void displaySensorDetails(void);
@@ -139,7 +139,6 @@ void setup() {
   SPI.begin();
   Wire.begin();
   do {
-    delay(50);
     if (!bmp.begin_I2C()) {  //Display error message if not able to connect to Barometer, defautls to I2C mode (what we are using)
       Serial.println("Error: No Barometer found on I2C bus");
       leds[1] = CRGB(255,0,0);
@@ -147,7 +146,6 @@ void setup() {
     }
     else leds[1] = CRGB(0,255,0);
     FastLED.show();
-    delay(50);
 
     if (!bno.begin()) { //Display error message if not able to connect to IMU
       Serial.println("Error: No IMU found on I2C bus");
@@ -156,7 +154,6 @@ void setup() {
     }
     else leds[2] = CRGB(255,240,0);
     FastLED.show();
-    delay(50);
 
     if (!SD.begin(CS_PIN)) { //Display error message if not able to connect to Micro SD card adapter
       Serial.println("Error: Unable to initialize SD card, no adapter found on SPI bus");
@@ -165,7 +162,6 @@ void setup() {
     }
     else leds[3] = CRGB(0,255,0);
     FastLED.show();
-    delay(50);
     
     if (SD.begin(CS_PIN) && bmp.begin_I2C() && bno.begin()) {
       badSensorComms = false;
@@ -182,10 +178,12 @@ void setup() {
   bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
   //Zero sensor at altitude
-  AltOffset = bmp.readAltitude(SEALEVELPRESSURE_HPA);
-  Serial.print("Zeroed at altitude ");
-  Serial.print(AltOffset);
-  Serial.println(" ");
+  float tempPressure = bmp.readPressure();
+  delay(500); //Let sensor initialize
+  altOffset = bmp.readAltitude(SEALEVELPRESSURE_HPA);
+  Serial.print("\nZeroed at altitude ");
+  Serial.print(altOffset);
+  Serial.println(" m");
   
   //Initialize CSV on SD card
   csvName = getCSVName(0);
@@ -205,8 +203,9 @@ void setup() {
   else {
     leds[3] = CRGB(255,0,0);
     Serial.println("\nError opening data file, could not write headers");
+    delay(500);
   }
-  delay(100);
+ 
 
   //Begin BNO055 setup
 
@@ -220,7 +219,7 @@ void setup() {
   */
   if (!SD.exists("calibration.bin"))
   {
-    Serial.println("No calibration data on SD card");
+    Serial.println("\nNo calibration data on SD card");
     calibOnSD = false;
   }
   else
@@ -238,14 +237,12 @@ void setup() {
         bno.setSensorOffsets(calibrationData);
         Serial.println("Calibration data loaded into BNO055");
         foundCalib = true;
-        delay(100);
 
         //Display new offsets for verification
         adafruit_bno055_offsets_t newData;
         Serial.println("Offsets currently on sensor:");
         if (bno.getSensorOffsets(newData)) {
           displaySensorOffsets(newData);
-          delay(500); //Allow operator to verify offsets are the same
         }
         else {
           Serial.println("\nFailed to read new offsets");
@@ -272,8 +269,6 @@ void setup() {
     }
   }
 
-  delay(250);
-
   /* Display some basic information on this sensor */
   displaySensorDetails();
 
@@ -299,7 +294,7 @@ void setup() {
       imu::Vector<3> euler = bno.getQuat().toEuler();
       
       double x = euler.y() * degToRad;
-      double y = euler.z() * degToRad;
+      double y = -euler.z() * degToRad;
       double z = euler.x() * degToRad;
       
       Serial.print("X: ");
@@ -353,11 +348,8 @@ void setup() {
   }
   //bno.setMode(OPERATION_MODE_IMUPLUS); // set BNO to not use magnetometer
 
-  delay(50);
-
   fill_solid(leds, NUM_LEDS, CRGB(0, 255, 0));
   FastLED.show(); 
-  delay(1000);
 
   //End BNO055 Setup
 
@@ -372,12 +364,12 @@ void setup() {
     Serial.print("Upwards acceleration: ");
     Serial.print(-accelerometerData.acceleration.y);
     Serial.println(" m/s^2");
-    delay(SENSOR_SAMPLE_PERIOD);
+    delay(SENSOR_SAMPLE_MIN_DELAY);
 
-  } while ((accelerometerData.acceleration.y >= -20) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - AltOffset) <= 10));
+  } while ((accelerometerData.acceleration.y >= -20) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - altOffset) <= 10));
   
   //Launch detect
-  unsigned long launchTime = millis();
+  launchTime = millis();
   flightState = 2;
   Serial.println("\n*****************");
   Serial.println("Launch Detected!");
@@ -397,7 +389,7 @@ void loop() {
   //Flight conditions
 
   //Aerobrake Deploy
-  if ((flightState == 2) && (bmp.readAltitude(SEALEVELPRESSURE_HPA) >= AEROBRAKE_DEPLOY)) {
+  if ((flightState == 2) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - altOffset)>= AEROBRAKE_DEPLOY)) {
     flightState = 3;
     Serial.println("\nAt altitude, aerobrakes deployed");
     BRAKE_PWM.writeMicroseconds(2500);
@@ -410,26 +402,28 @@ void loop() {
   if ((millis() - altIndexTimer) >= 5000) {
     altIndexTimer = millis();
     //somewhat excessive for shifting two values but it's scaleable so whatever
-    for (int i = 1; i >= 0; i--) {
-      altIndex[i+1] = altIndex[i];
+    for (int i = (sizeof(altIndex) / sizeof(float)) - 1; i > 0; i--) {
+      altIndex[i] = altIndex[i - 1];
     }
     altIndex[0] = bmp.readAltitude(SEALEVELPRESSURE_HPA);
   }
 
-  if (
-    (max(altIndex[0],max(altIndex[1], altIndex[2])) 
-    - min(altIndex[0],min(altIndex[1], altIndex[2]))) <= 10)
-    {    
+  if ( //If highest alt in array and lowest alt in array closer than 10 meters, landed 
+    (flightState != 4) && ((millis() - launchTime) >= 20000) && //Can't have just launched or it would trigger immediately
+    ((max(altIndex[0],max(altIndex[1], altIndex[2])) -
+    min(altIndex[0],min(altIndex[1], altIndex[2]))) <= 10))
+    {
     flightState = 4;
     Serial.print("\nDetected landing at ");
-    Serial.print(altIndex[0]);
+    Serial.print(altIndex[0] - altOffset);
     Serial.println(" meters");
     fill_solid(leds, NUM_LEDS, CRGB(0, 0, 255));
     FastLED.show();
   }
 
   //Perform logging every sample period
-  if ((flightState != 4) && ((millis() - logTime) >= SENSOR_SAMPLE_PERIOD)) {
+  if ((flightState != 4)) {
+    while ((millis() - logTime) < SENSOR_SAMPLE_MIN_DELAY) delay(1); //Make sure data logged no more than 100 times/sec
     
     //Pull data
 
@@ -442,34 +436,34 @@ void loop() {
     bno.getEvent(&angVel, Adafruit_BNO055::VECTOR_GYROSCOPE);
 
     //BMP
-    float altitude = bmp.readAltitude(SEALEVELPRESSURE_HPA);
+    float altitude = bmp.readAltitude(SEALEVELPRESSURE_HPA) - altOffset;
     float pressure = bmp.readPressure();
     float temperature = bmp.readTemperature();
 
     //Record data
     dataFile = SD.open(csvName, FILE_WRITE);
     if (dataFile) {
-      dataFile.print(logTime);
+      dataFile.print(logTime - launchTime);
       comma();
       dataFile.print(altitude);
       comma();
-      dataFile.print(acceleration.acceleration.x);
-      comma();
       dataFile.print(acceleration.acceleration.z);
+      comma();
+      dataFile.print(-acceleration.acceleration.x);
       comma();
       dataFile.print(-acceleration.acceleration.y);
       comma();
+      dataFile.print(orientation.y() * degToRad);
+      comma();
+      dataFile.print(-orientation.z() * degToRad);
+      comma();
       dataFile.print(orientation.x() * degToRad);
       comma();
-      dataFile.print(orientation.z() * degToRad);
+      dataFile.print(angVel.gyro.z * degToRad);
       comma();
-      dataFile.print(-orientation.y() * degToRad);
+      dataFile.print(-angVel.gyro.x * degToRad);
       comma();
-      dataFile.print(angVel.gyro.x / degToRad);
-      comma();
-      dataFile.print(angVel.gyro.z / degToRad);
-      comma();
-      dataFile.print(-angVel.gyro.y / degToRad);
+      dataFile.print(-angVel.gyro.y * degToRad);
       comma();
       dataFile.print(pressure);
       comma();
@@ -482,15 +476,16 @@ void loop() {
       Serial.println("\nFailed to open CSV file");
     }
   }
-  //Print average loop time every half a second
-  if ((millis() - loopPrintTimer) >= (500)) {
+  //Print average loop time every two seconds
+  if ((millis() - loopPrintTimer) >= (2000)) {
     loopTime = (millis() - loopPrintTimer)/loopsElapsed;
     loopPrintTimer = millis();
+    loopsElapsed = 0;
     Serial.print("\nLoop time: ");
     Serial.print(loopTime);
     Serial.println(" milliseconds");
   }
-  loopsElapsed ++;
+  else loopsElapsed ++;
 }
 
 /*Try to get a name for a CSV file like data0.csv, if already present try the next number.
