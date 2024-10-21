@@ -6,6 +6,7 @@
 #include "Adafruit_BMP3XX.h"
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
+#include <Servo.h>
 
 
 /**************************************************************************/
@@ -23,6 +24,11 @@
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
 File testFile;
 File logFile;
+
+Servo myservo;  // create Servo object to control a servo
+
+int potpin = A0;  // analog pin used to connect the potentiometer
+int val;    // variable to read the value from the analog pin
 
 /**************************************************************************/
 /*
@@ -153,6 +159,7 @@ void setup() {
 
   bno.setExtCrystalUse(true);
 
+  myservo.attach(9);  // attaches the servo on pin 9 to the Servo object
 /**************************************************************************/
 /*
  End BNO setup
@@ -182,6 +189,8 @@ Serial.begin(9600);
   bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
   bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
+
+
   Serial.print("Temperature = ");
   Serial.print(bmp.temperature);
   Serial.println(" *C");
@@ -201,7 +210,7 @@ Serial.begin(9600);
   {
     Serial.println("Failed");
     while(1);
-}
+  }
 
   testFile = SD.open("test.txt", FILE_WRITE);
 
@@ -215,14 +224,31 @@ Serial.begin(9600);
   {
     Serial.println("Error opening the test file");
   }
+  myservo.attach(9); 
 }
 
 
+
+ 
 /**************************************************************************/
 /*
   end BMP setup
 */
 /**************************************************************************/
+
+/**************************************************************************/
+/*
+  servo setup
+*/
+/**************************************************************************/
+
+
+void loop() {
+  val = analogRead(potpin);            // reads the value of the potentiometer (value between 0 and 1023)
+  val = map(val, 0, 1023, 0, 180);     // scale it for use with the servo (value between 0 and 180)
+  myservo.write(val);                  // sets the servo position according to the scaled value
+  delay(15);                           // waits for the servo to get there
+}
 
 //void loop() {
   //logFile = SD.open("logfile.txt", FILE_WRITE);
@@ -260,7 +286,7 @@ Serial.begin(9600);
  // }
 //}
 
-void loop() {
+void loop2() {
   logFile = SD.open("logfile.csv", FILE_WRITE);  // Change filename to .csv
   if (logFile) {
     /* Get a new sensor event */ 
