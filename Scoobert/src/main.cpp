@@ -30,6 +30,8 @@ Servo myservo;  // create Servo object to control a servo
 int potpin = A0;  // analog pin used to connect the potentiometer
 int val;    // variable to read the value from the analog pin
 
+float prevAlt;
+bool start = false;
 /**************************************************************************/
 /*
     Displays some basic information on this sensor from the unified
@@ -245,13 +247,6 @@ float readAltitude() {
 */
 /**************************************************************************/
 
-/**************************************************************************/
-/*
-  servo setup
-*/
-/**************************************************************************/
-
-
 void loop() {
   //val = analogRead(potpin);            // reads the value of the potentiometer (value between 0 and 1023)
   //val = map(val, 0, 1023, 0, 180);     // scale it for use with the servo (value between 0 and 180)
@@ -259,7 +254,8 @@ void loop() {
   //delay(15);   
   //myservo.write(100);
   //delay(10);// waits for the servo to get there
-
+if (start)
+{
   logFile = SD.open("logfile.csv", FILE_WRITE);  // Change filename to .csv
   if (logFile) {
     /* Get a new sensor event */ 
@@ -296,7 +292,8 @@ void loop() {
     Serial.println("Error opening the logfile");
   }
 
-  delay(200); //logs the data every 100 milliseconds, subject to change
+  delay(100); //logs the data every 100 milliseconds, subject to change
+}
 
 
   static float maxAltitude = 0; // Variable to store the maximum altitude
@@ -312,44 +309,9 @@ void loop() {
     Serial.print(" m, Max Altitude: ");
     Serial.print(maxAltitude);
     Serial.println(" m");
+
+    if (currentAltitude - prevAlt > 0.5)
+    {
+      start=true;
+    }
 }
-
-
-//
-// code that we won't use unless things change
-//
-//void loop() {
-  //logFile = SD.open("logfile.txt", FILE_WRITE);
- // if (logFile)
- // {
-  /* Get a new sensor event */ 
-  //sensors_event_t event; 
- // bno.getEvent(&event);
-  
- // logFile << event.orientation.x << " " << event.orientation.y << " " << event.orientation.z;
- // OUTPUT = std::to_string(event.orientation.x) + " " + std::to_string(event.orientation.y) + " " + std::to_string(event.orientation.z);
- // logFile << std::endl;
-  
-  //delay(100);
-  
-  //if (! bmp.performReading()) {
-  //  Serial.println("Failed to perform reading :(");
-  //  return;
-  //}
- // logFile.print("Temperature = ");
- // logFile.print(bmp.temperature);
-  //logFile.println(" *C");
-
-  //logFile.print("Pressure = ");
-  //logFile.print(bmp.pressure / 100.0);
- // logFile.println(" hPa");
-
- // logFile.print("Approx. Altitude = ");
- // logFile.print(bmp.readAltitude(1013.25));
- // logFile.println(" m");
-
-  //logFile.println();
- // logFile.close();
- // delay(2000);
- // }
-//}
