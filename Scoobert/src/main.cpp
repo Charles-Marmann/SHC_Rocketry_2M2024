@@ -235,7 +235,7 @@ Serial.begin(9600);
 float readAltitude() {
     // Replace this with actual sensor reading code
     // For example, use analogRead() or a library function to get the altitude
-    return random(0, 1000);  // Simulated altitude (0 to 1000 meters)
+    return bmp.readAltitude(SEALEVELPRESSURE_HPA);  //altitude (0 to 1500 meters)
 }
 
  
@@ -253,16 +253,53 @@ float readAltitude() {
 
 
 void loop() {
-  val = analogRead(potpin);            // reads the value of the potentiometer (value between 0 and 1023)
-  val = map(val, 0, 1023, 0, 180);     // scale it for use with the servo (value between 0 and 180)
-  myservo.write(val);                  // sets the servo position according to the scaled value
-  delay(15);   
-  myservo.write(100);
-  delay(10);// waits for the servo to get there
-}
+  //val = analogRead(potpin);            // reads the value of the potentiometer (value between 0 and 1023)
+  //val = map(val, 0, 1023, 0, 180);     // scale it for use with the servo (value between 0 and 180)
+  //myservo.write(val);                  // sets the servo position according to the scaled value
+  //delay(15);   
+  //myservo.write(100);
+  //delay(10);// waits for the servo to get there
 
-void loop2() {
-    static float maxAltitude = 0; // Variable to store the maximum altitude
+  logFile = SD.open("logfile.csv", FILE_WRITE);  // Change filename to .csv
+  if (logFile) {
+    /* Get a new sensor event */ 
+    sensors_event_t event; 
+    bno.getEvent(&event);
+
+    // Log orientation data in CSV format
+    
+    logFile.print(event.orientation.x);  // Log x orientation
+    logFile.print(",");                   // Add comma as separator
+    logFile.print(event.orientation.y);  // Log y orientation
+    logFile.print(",");                   // Add comma as separator
+    logFile.print(event.orientation.z);  // Log z orientation
+    logFile.print(",");  
+    //logFile.println();                    // End the line for the next log entry
+
+    // Read BMP data
+    if (!bmp.performReading()) {
+      Serial.println("Failed to perform reading :(");
+      logFile.close(); // Ensure to close logFile if reading fails
+      return;
+    }
+
+    // Log temperature, pressure, and altitude in CSV format
+    logFile.print(bmp.temperature);
+    logFile.print(",");  // Add comma as separator
+    logFile.print(bmp.pressure / 100.0);
+    logFile.print(",");  // Add comma as separator
+    logFile.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
+    logFile.println();  // End the line
+
+    logFile.close(); // Always close the file when done
+  } else {
+    Serial.println("Error opening the logfile");
+  }
+
+  delay(200); //logs the data every 100 milliseconds, subject to change
+
+
+  static float maxAltitude = 0; // Variable to store the maximum altitude
     float currentAltitude = readAltitude(); // Get the current altitude
 
     // Check if the current altitude is greater than the maximum recorded altitude
@@ -276,6 +313,7 @@ void loop2() {
     Serial.print(maxAltitude);
     Serial.println(" m");
 }
+
 
 //
 // code that we won't use unless things change
@@ -315,43 +353,3 @@ void loop2() {
  // delay(2000);
  // }
 //}
-
-void loop3() {
-  logFile = SD.open("logfile.csv", FILE_WRITE);  // Change filename to .csv
-  if (logFile) {
-    /* Get a new sensor event */ 
-    sensors_event_t event; 
-    bno.getEvent(&event);
-
-    // Log orientation data in CSV format
-    logFile.print(event.orientation.x);
-    logFile.print(",");  // Add comma as separator
-    logFile.print(event.orientation.y);
-    logFile.print(",");  // Add comma as separator
-    logFile.print(event.orientation.z);
-    logFile.print(",");  // Add comma for next field (temperature)
-    
-    // Read BMP data
-    if (!bmp.performReading()) {
-      Serial.println("Failed to perform reading :(");
-      logFile.close(); // Ensure to close logFile if reading fails
-      return;
-    }
-
-    // Log temperature, pressure, and altitude in CSV format
-    logFile.print(bmp.temperature);
-    logFile.print(",");  // Add comma as separator
-    logFile.print(bmp.pressure / 100.0);
-    logFile.print(",");  // Add comma as separator
-    logFile.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
-    logFile.println();  // End the line
-
-    logFile.close(); // Always close the file when done
-  } else {
-    Serial.println("Error opening the logfile");
-  }
-
-  delay(100); //logs the data every 100 milliseconds, subject to change
-}
-
-
