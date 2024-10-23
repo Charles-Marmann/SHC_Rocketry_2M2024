@@ -227,8 +227,7 @@ Serial.begin(9600);
     Serial.println("Error opening the test file");
   }
 
-  myservo.attach(9); 
-
+  myservo.attach(22); 
 
 
 }
