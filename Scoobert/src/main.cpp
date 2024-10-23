@@ -161,7 +161,7 @@ void setup() {
 
   bno.setExtCrystalUse(true);
 
-  myservo.attach(9);  // attaches the servo on pin 9 to the Servo object
+  myservo.attach(22);  // attaches the servo on pin 9 to the Servo object
 /**************************************************************************/
 /*
  End BNO setup
@@ -227,8 +227,8 @@ Serial.begin(9600);
     Serial.println("Error opening the test file");
   }
 
-  myservo.attach(9); 
-
+ 
+  myservo.write(90);
 
 
 }
