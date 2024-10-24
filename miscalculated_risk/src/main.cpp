@@ -9,6 +9,16 @@
 #include "Adafruit_BMP3XX.h"
 #include <utility/imumaths.h>
 
+//Shortcut for turning off serial
+#define ENABLESERIALPRINT 1
+#if ENABLESERIALPRINT
+  #define SRLPrint(x) Serial.print(x)
+  #define SRLPrintln(x) Serial.println(x)
+#else
+  #define SRLPrint(x)
+  #define SRLPrintln(x)
+#endif
+
 /*
 0 - Startup
 1 - Awaiting launch
@@ -114,11 +124,13 @@ void setup() {
   //pinMode(BRAKE_PWM, OUTPUT);
 
   //Connect to serial monitor
-  Serial.begin(115200);
-  //while (!Serial) delay(10); //Wait to start communiticating until serial opens
-  delay(2000);
-  Serial.println("Connected to Flight Computer");
-  Serial.println("");
+  #if ENABLESERIALPRINT
+    Serial.begin(115200);
+    //while (!Serial) delay(10); //Wait to start communiticating until serial opens
+    delay(2000);
+  #endif
+  SRLPrintln("Connected to Flight Computer");
+  SRLPrintln("");
   //Add led element
   FastLED.addLeds<NEOPIXEL, LED_PWM>(leds, NUM_LEDS);  //Defaults to GRB color order
   FastLED.setBrightness(25);
@@ -139,7 +151,7 @@ void setup() {
   Wire.begin();
   do {
     if (!bmp.begin_I2C()) {  //Display error message if not able to connect to Barometer, defautls to I2C mode (what we are using)
-      Serial.println("Error: No Barometer found on I2C bus");
+      SRLPrintln("Error: No Barometer found on I2C bus");
       leds[1] = CRGB(255,0,0);
       badSensorComms = true;
     }
@@ -147,7 +159,7 @@ void setup() {
     FastLED.show();
 
     if (!bno.begin()) { //Display error message if not able to connect to IMU
-      Serial.println("Error: No IMU found on I2C bus");
+      SRLPrintln("Error: No IMU found on I2C bus");
       leds[2] = CRGB(255,0,0);
       badSensorComms = true;
     }
@@ -155,7 +167,7 @@ void setup() {
     FastLED.show();
 
     if (!SD.begin(CS_PIN)) { //Display error message if not able to connect to Micro SD card adapter
-      Serial.println("Error: Unable to initialize SD card, no adapter found on SPI bus");
+      SRLPrintln("Error: Unable to initialize SD card, no adapter found on SPI bus");
       leds[3] = CRGB(255,0,0);
       badSensorComms = true;
     }
@@ -180,20 +192,20 @@ void setup() {
   float tempPressure = bmp.readPressure();
   delay(500); //Let sensor initialize
   altOffset = bmp.readAltitude(SEALEVELPRESSURE_HPA);
-  Serial.print("\nZeroed at altitude ");
-  Serial.print(altOffset);
-  Serial.println(" m");
+  SRLPrint("\nZeroed at altitude ");
+  SRLPrint(altOffset);
+  SRLPrintln(" m");
   
   //Initialize CSV on SD card
   csvName = getCSVName(0);
   if (csvName == 0) {
     leds[3] = CRGB(255,0,0);
-    Serial.println("\nMemory allocation error while trying to find a CSV file name");
-    Serial.println("How many fucking times did you run this thing");
+    SRLPrintln("\nMemory allocation error while trying to find a CSV file name");
+    SRLPrintln("How many fucking times did you run this thing");
     while(1);
   }
-  Serial.print("\nInitializing CSV file ");
-  Serial.println(csvName);
+  SRLPrint("\nInitializing CSV file ");
+  SRLPrintln(csvName);
   dataFile = SD.open(csvName, FILE_WRITE);
   if (dataFile) {
     dataFile.println(headerString);
@@ -201,7 +213,7 @@ void setup() {
   }
   else {
     leds[3] = CRGB(255,0,0);
-    Serial.println("\nError opening data file, could not write headers");
+    SRLPrintln("\nError opening data file, could not write headers");
     delay(500);
   }
  
@@ -218,12 +230,12 @@ void setup() {
   */
   if (!SD.exists("calibration.bin"))
   {
-    Serial.println("\nNo calibration data on SD card");
+    SRLPrintln("\nNo calibration data on SD card");
     calibOnSD = false;
   }
   else
   {
-    Serial.println("\nFound Calibration on SD card.");
+    SRLPrintln("\nFound Calibration on SD card.");
     calibInfo = SD.open("calibration.bin", FILE_READ);
     if (calibInfo) {
       //read file's bytes and shove into offsets
@@ -232,37 +244,37 @@ void setup() {
         displaySensorOffsets(calibrationData);
         calibInfo.close();
 
-        Serial.println("Restoring Calibration data to the BNO055...");
+        SRLPrintln("Restoring Calibration data to the BNO055...");
         bno.setSensorOffsets(calibrationData);
-        Serial.println("Calibration data loaded into BNO055");
+        SRLPrintln("Calibration data loaded into BNO055");
         foundCalib = true;
 
         //Display new offsets for verification
         adafruit_bno055_offsets_t newData;
-        Serial.println("Offsets currently on sensor:");
+        SRLPrintln("Offsets currently on sensor:");
         if (bno.getSensorOffsets(newData)) {
           displaySensorOffsets(newData);
         }
         else {
-          Serial.println("\nFailed to read new offsets");
+          SRLPrintln("\nFailed to read new offsets");
         }
       }
       else if (calibBytesRead == -1){ //Error while reading calibration data
-        Serial.println("\nCalibration data read failed");
+        SRLPrintln("\nCalibration data read failed");
         leds[3] = CRGB(255,0,0);
         FastLED.show();
       }
       else { //Mismatch of data bytes read
-        Serial.print("\nOnly read ");
-        Serial.print(calibBytesRead);
-        Serial.print(" bytes out of ");
-        Serial.println(sizeof(calibrationData));
+        SRLPrint("\nOnly read ");
+        SRLPrint(calibBytesRead);
+        SRLPrint(" bytes out of ");
+        SRLPrintln(sizeof(calibrationData));
         leds[3] = CRGB(255,0,0);
         FastLED.show();
       }
     }
     else { //File open error
-      Serial.println("\nCalibration data open failed");
+      SRLPrintln("\nCalibration data open failed");
       leds[3] = CRGB(255,0,0);
       FastLED.show();
     }
@@ -283,7 +295,7 @@ void setup() {
   if (!foundCalib) {
     leds[2] = CRGB(255,200,0);
     FastLED.show();
-    Serial.println("\nPlease Calibrate Sensor: ");
+    SRLPrintln("\nPlease Calibrate Sensor: ");
 
     //bno.setMode(OPERATION_MODE_NDOF);
 
@@ -295,20 +307,21 @@ void setup() {
       double x = euler.y() * degToRad;
       double y = -euler.z() * degToRad;
       double z = euler.x() * degToRad;
-      
-      Serial.print("X: ");
-      Serial.print(x, 4);
-      Serial.print(" Y: ");
-      Serial.print(y, 4);
-      Serial.print(" Z: ");
-      Serial.print(z, 4);
-      Serial.print("\t\t");
+      #if ENABLESERIALPRINT
+        SRLPrint("X: ");
+        Serial.print(x, 4);
+        SRLPrint(" Y: ");
+        Serial.print(y, 4);
+        SRLPrint(" Z: ");
+        Serial.print(z, 4);
+        SRLPrint("\t\t");
+      #endif
 
       /* Optional: Display calibration status */
       displayCalStatus();
 
       /* New line for the next sample */
-      Serial.println("");
+      SRLPrintln("");
 
       /* Wait the specified delay before requesting new data */
       delay(500);
@@ -316,9 +329,9 @@ void setup() {
   }
   //Get calibration offsets to write and display
   if(!calibOnSD) {
-    Serial.println("\nFully calibrated!");
-    Serial.println("--------------------------------");
-    Serial.println("Calibration Results: ");
+    SRLPrintln("\nFully calibrated!");
+    SRLPrintln("--------------------------------");
+    SRLPrintln("Calibration Results: ");
 
     adafruit_bno055_offsets_t newCalib;
     if (bno.getSensorOffsets(newCalib)) {
@@ -328,18 +341,18 @@ void setup() {
       if (calibInfo) {
         calibInfo.write((uint8_t *)&newCalib, sizeof(newCalib));
         calibInfo.close();
-        Serial.println("Saved calibration data to SD card");
+        SRLPrintln("Saved calibration data to SD card");
         delay(100);
       }
       else {
-        Serial.println("\nSD card write failure, offsets may be borked!");
+        SRLPrintln("\nSD card write failure, offsets may be borked!");
         leds[3] = CRGB(255,0,0);
         FastLED.show();
         delay(2000);
       }
     }
     else {
-      Serial.println("\nOffset retrieval failure; cannot save offsets");
+      SRLPrintln("\nOffset retrieval failure; cannot save offsets");
       leds[3] = CRGB(255,0,0);
       FastLED.show();
       delay(2000);
@@ -355,14 +368,14 @@ void setup() {
   //Repeatedly check accelerometer and barometer altitude:
   flightState = 1;
   sensors_event_t accelerometerData;
-  Serial.println("");
+  SRLPrintln("");
   do {
     bno.getEvent(&accelerometerData, Adafruit_BNO055::VECTOR_ACCELEROMETER);
     
     //print observed acceleration
-    Serial.print("Upwards acceleration: ");
-    Serial.print(-accelerometerData.acceleration.y);
-    Serial.println(" m/s^2");
+    SRLPrint("Upwards acceleration: ");
+    SRLPrint(-accelerometerData.acceleration.y);
+    SRLPrintln(" m/s^2");
     delay(SENSOR_SAMPLE_MIN_DELAY);
 
   } while ((accelerometerData.acceleration.y >= -20) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - altOffset) <= 10));
@@ -370,9 +383,9 @@ void setup() {
   //Launch detect
   launchTime = millis();
   flightState = 2;
-  Serial.println("\n*****************");
-  Serial.println("Launch Detected!");
-  Serial.println("*****************");
+  SRLPrintln("\n*****************");
+  SRLPrintln("Launch Detected!");
+  SRLPrintln("*****************");
   fill_solid(leds, NUM_LEDS, CRGB(160, 43, 147));  // Fill all LEDs with Purple
   FastLED.show();
 }
@@ -389,7 +402,7 @@ void loop() {
   //Aerobrake Deploy
   if ((flightState == 2) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - altOffset)>= AEROBRAKE_DEPLOY)) {
     flightState = 3;
-    Serial.println("\nAt altitude, aerobrakes deployed");
+    SRLPrintln("\nAt altitude, aerobrakes deployed");
     BRAKE_PWM.writeMicroseconds(2500);
     fill_solid(leds, NUM_LEDS, CRGB(255, 100, 0));
     FastLED.show();
@@ -414,9 +427,9 @@ void loop() {
     min(altIndex[0],min(altIndex[1], altIndex[2]))) <= 10))
     {
     flightState = 4;
-    Serial.print("\nDetected landing at ");
-    Serial.print(altIndex[0] - altOffset);
-    Serial.println(" meters");
+    SRLPrint("\nDetected landing at ");
+    SRLPrint(altIndex[0] - altOffset);
+    SRLPrintln(" meters");
     fill_solid(leds, NUM_LEDS, CRGB(0, 0, 255));
     FastLED.show();
   }
@@ -471,7 +484,7 @@ void loop() {
     }
     else {
       leds[3] = CRGB(255, 0, 0);
-      Serial.println("\nFailed to open CSV file");
+      SRLPrintln("\nFailed to open CSV file");
     }
     
     if ((millis() - fileSaveTimer) >= 5000) {
@@ -489,9 +502,9 @@ void loop() {
     loopTime = (millis() - loopPrintTimer)/loopsElapsed;
     loopPrintTimer = millis();
     loopsElapsed = 0;
-    Serial.print("\nLoop time: ");
-    Serial.print(loopTime);
-    Serial.println(" milliseconds");
+    SRLPrint("\nLoop time: ");
+    SRLPrint(loopTime);
+    SRLPrintln(" milliseconds");
   }
   else loopsElapsed ++;
   */
@@ -558,15 +571,15 @@ void displaySensorDetails(void)
 {
     sensor_t sensor;
     bno.getSensor(&sensor);
-    Serial.println("------------------------------------");
-    Serial.print("Sensor:       "); Serial.println(sensor.name);
-    Serial.print("Driver Ver:   "); Serial.println(sensor.version);
-    Serial.print("Unique ID:    "); Serial.println(sensor.sensor_id);
-    Serial.print("Max Value:    "); Serial.print(sensor.max_value); Serial.println(" xxx");
-    Serial.print("Min Value:    "); Serial.print(sensor.min_value); Serial.println(" xxx");
-    Serial.print("Resolution:   "); Serial.print(sensor.resolution); Serial.println(" xxx");
-    Serial.println("------------------------------------");
-    Serial.println("");
+    SRLPrintln("------------------------------------");
+    SRLPrint("Sensor:       "); SRLPrintln(sensor.name);
+    SRLPrint("Driver Ver:   "); SRLPrintln(sensor.version);
+    SRLPrint("Unique ID:    "); SRLPrintln(sensor.sensor_id);
+    SRLPrint("Max Value:    "); SRLPrint(sensor.max_value); SRLPrintln(" xxx");
+    SRLPrint("Min Value:    "); SRLPrint(sensor.min_value); SRLPrintln(" xxx");
+    SRLPrint("Resolution:   "); SRLPrint(sensor.resolution); SRLPrintln(" xxx");
+    SRLPrintln("------------------------------------");
+    SRLPrintln("");
     delay(100);
 }
 
@@ -583,14 +596,16 @@ void displaySensorStatus(void)
     bno.getSystemStatus(&system_status, &self_test_results, &system_error);
 
     /* Display the results in the Serial Monitor */
-    Serial.println("");
-    Serial.print("System Status: 0x");
-    Serial.println(system_status, HEX);
-    Serial.print("Self Test:     0x");
-    Serial.println(self_test_results, HEX);
-    Serial.print("System Error:  0x");
-    Serial.println(system_error, HEX);
-    Serial.println("");
+    #if ENABLESERIALPRINT
+      SRLPrintln("");
+      SRLPrint("System Status: 0x");
+      Serial.println(system_status, HEX);
+      SRLPrint("Self Test:     0x");
+      Serial.println(self_test_results, HEX);
+      SRLPrint("System Error:  0x");
+      Serial.println(system_error, HEX);
+      SRLPrintln("");
+    #endif
     delay(100);
 }
 
@@ -609,21 +624,23 @@ void displayCalStatus(void)
     bno.getCalibration(&system, &gyro, &accel, &mag);
 
     /* The data should be ignored until the system calibration is > 0 */
-    Serial.print("\t");
+    SRLPrint("\t");
     if (!system)
     {
-        Serial.print("! ");
+        SRLPrint("! ");
     }
 
     /* Display the individual values */
-    Serial.print("Sys:");
-    Serial.print(system, DEC);
-    Serial.print(" G:");
-    Serial.print(gyro, DEC);
-    Serial.print(" A:");
-    Serial.print(accel, DEC);
-    Serial.print(" M:");
-    Serial.print(mag, DEC);
+    #if ENABLESERIALPRINT
+      SRLPrint("Sys:");
+      Serial.print(system, DEC);
+      SRLPrint(" G:");
+      Serial.print(gyro, DEC);
+      SRLPrint(" A:");
+      Serial.print(accel, DEC);
+      SRLPrint(" M:");
+      Serial.print(mag, DEC);
+    #endif
     delay(100);
 }
 
@@ -634,25 +651,25 @@ void displayCalStatus(void)
 /**************************************************************************/
 void displaySensorOffsets(const adafruit_bno055_offsets_t &calibData)
 {
-    Serial.print("Accelerometer: ");
-    Serial.print(calibData.accel_offset_x); Serial.print(" ");
-    Serial.print(calibData.accel_offset_y); Serial.print(" ");
-    Serial.print(calibData.accel_offset_z); Serial.print(" ");
+    SRLPrint("Accelerometer: ");
+    SRLPrint(calibData.accel_offset_x); SRLPrint(" ");
+    SRLPrint(calibData.accel_offset_y); SRLPrint(" ");
+    SRLPrint(calibData.accel_offset_z); SRLPrint(" ");
 
-    Serial.print("\nGyro: ");
-    Serial.print(calibData.gyro_offset_x); Serial.print(" ");
-    Serial.print(calibData.gyro_offset_y); Serial.print(" ");
-    Serial.print(calibData.gyro_offset_z); Serial.print(" ");
+    SRLPrint("\nGyro: ");
+    SRLPrint(calibData.gyro_offset_x); SRLPrint(" ");
+    SRLPrint(calibData.gyro_offset_y); SRLPrint(" ");
+    SRLPrint(calibData.gyro_offset_z); SRLPrint(" ");
 
-    Serial.print("\nMag: ");
-    Serial.print(calibData.mag_offset_x); Serial.print(" ");
-    Serial.print(calibData.mag_offset_y); Serial.print(" ");
-    Serial.print(calibData.mag_offset_z); Serial.print(" ");
+    SRLPrint("\nMag: ");
+    SRLPrint(calibData.mag_offset_x); SRLPrint(" ");
+    SRLPrint(calibData.mag_offset_y); SRLPrint(" ");
+    SRLPrint(calibData.mag_offset_z); SRLPrint(" ");
 
-    Serial.print("\nAccel Radius: ");
-    Serial.print(calibData.accel_radius);
+    SRLPrint("\nAccel Radius: ");
+    SRLPrint(calibData.accel_radius);
 
-    Serial.print("\nMag Radius: ");
-    Serial.println(calibData.mag_radius);
+    SRLPrint("\nMag Radius: ");
+    SRLPrintln(calibData.mag_radius);
     delay(100);
 }
