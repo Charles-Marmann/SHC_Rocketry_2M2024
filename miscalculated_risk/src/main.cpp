@@ -21,7 +21,6 @@ int flightState = 0;
 //time tracking
 int loopsElapsed = 0; //# of loops executed since loopTime measured
 
-unsigned long loopStartTime = 0; //time (millis) set at beginning of loop, for loop time calculation
 unsigned long loopTime; //delta-t (millis) calculated at end of loop
 unsigned long loopPrintTimer = 0; //time (millis) set every time the loop time is printed to serial
 
@@ -384,9 +383,8 @@ MAIN LOOP
 
 **************************************************************************/
 void loop() {
-  loopStartTime = millis();
   
-  //Flight conditions
+  //State machine
 
   //Aerobrake Deploy
   if ((flightState == 2) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - altOffset)>= AEROBRAKE_DEPLOY)) {
@@ -398,6 +396,7 @@ void loop() {
   }
 
   //Landing detection
+
   //Index new altitude every five seconds
   if ((millis() - altIndexTimer) >= 5000) {
     altIndexTimer = millis();
@@ -408,7 +407,8 @@ void loop() {
     altIndex[0] = bmp.readAltitude(SEALEVELPRESSURE_HPA);
   }
 
-  if ( //If highest alt in array and lowest alt in array closer than 10 meters, landed 
+  //If highest alt in array and lowest alt in array are closer than 10 meters, landed 
+  if (
     (flightState != 4) && ((millis() - launchTime) >= 20000) && //Can't have just launched or it would trigger immediately
     ((max(altIndex[0],max(altIndex[1], altIndex[2])) -
     min(altIndex[0],min(altIndex[1], altIndex[2]))) <= 10))
@@ -421,12 +421,10 @@ void loop() {
     FastLED.show();
   }
 
-  //Perform logging every sample period
-  if ((flightState != 4)) {
-    while ((millis() - logTime) < SENSOR_SAMPLE_MIN_DELAY) delay(1); //Make sure data logged no more than 100 times/sec
+  //Perform logging when not landed
+  if (flightState != 4) {
     
     //Pull data
-
     unsigned long logTime = millis();
 
     //BNO
@@ -441,7 +439,8 @@ void loop() {
     float temperature = bmp.readTemperature();
 
     //Record data
-    dataFile = SD.open(csvName, FILE_WRITE);
+    if (!dataFile) dataFile = SD.open(csvName, FILE_WRITE);
+
     if (dataFile) {
       dataFile.print(logTime - launchTime);
       comma();
@@ -469,13 +468,22 @@ void loop() {
       comma();
       dataFile.print(temperature);
       dataFile.print('\n');
-      dataFile.close();
     }
     else {
       leds[3] = CRGB(255, 0, 0);
       Serial.println("\nFailed to open CSV file");
     }
+    
+    if ((millis() - fileSaveTimer) >= 5000) {
+      dataFile.close();
+      fileSaveTimer = millis();
+    }
   }
+  else if (dataFile) {
+    dataFile.close();
+  }
+
+  /*
   //Print average loop time every two seconds
   if ((millis() - loopPrintTimer) >= (2000)) {
     loopTime = (millis() - loopPrintTimer)/loopsElapsed;
@@ -486,6 +494,7 @@ void loop() {
     Serial.println(" milliseconds");
   }
   else loopsElapsed ++;
+  */
 }
 
 /*Try to get a name for a CSV file like data0.csv, if already present try the next number.
