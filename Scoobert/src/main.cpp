@@ -32,6 +32,10 @@ int val;    // variable to read the value from the analog pin
 
 float prevAlt;
 bool start = false;
+
+float startAlt;
+
+const int ledPin = 27;
 /**************************************************************************/
 /*
     Displays some basic information on this sensor from the unified
@@ -133,13 +137,13 @@ Adafruit_BMP3XX bmp;
 
 void setup() {
 
-/**************************************************************************/
-/*
- Begin BNO setup
-*/
-/**************************************************************************/
+  /**************************************************************************/
+  /*
+  Begin BNO setup
+  */
+  /**************************************************************************/
 
-    while (!Serial) delay(10);  // wait for serial port to open!
+  //while (!Serial) {delay(10);}  // wait for serial port to open!
 
   Serial.println("Orientation Sensor Test"); Serial.println("");
 
@@ -161,20 +165,20 @@ void setup() {
 
   bno.setExtCrystalUse(true);
 
-/**************************************************************************/
-/*
- End BNO setup
-*/
-/**************************************************************************/
+  /**************************************************************************/
+  /*
+  End BNO setup
+  */
+  /**************************************************************************/
 
-/**************************************************************************/
-/*
-  Start BMP setup
-*/
-/**************************************************************************/
+  /**************************************************************************/
+  /*
+    Start BMP setup
+  */
+  /**************************************************************************/
 
-Serial.begin(9600);
-  while (!Serial);
+  Serial.begin(9600);
+  delay(100);
   Serial.println("Adafruit BMP388 / BMP390 test");
 
   if (!bmp.begin_I2C()) {   // hardware I2C mode, can pass in address & alt Wire
@@ -205,7 +209,14 @@ Serial.begin(9600);
   Serial.println(" m");
 
   Serial.println();
-
+  delay(1000);
+  if (!bmp.performReading()) {
+      Serial.println("Failed to perform reading :(");
+      logFile.close(); // Ensure to close logFile if reading fails
+      return;
+    }
+    delay(1000);
+  startAlt = bmp.readAltitude(SEALEVELPRESSURE_HPA);
 
   if (!SD.begin(17))
   {
@@ -226,9 +237,12 @@ Serial.begin(9600);
     Serial.println("Error opening the test file");
   }
 
-  myservo.attach(22); 
-  myservo.write(90);
+  myservo.attach(22,900,2100); 
+  Serial.println("Do you consent");
+  delay(100);
+  myservo.writeMicroseconds(900);
 
+  pinMode(ledPin, OUTPUT);
 
 }
 
@@ -278,6 +292,11 @@ if (start)
       return;
     }
 
+  if (bmp.readAltitude(SEALEVELPRESSURE_HPA)>= 5.0+startAlt)
+  {
+    myservo.writeMicroseconds(2100);
+  }
+
     // Log temperature, pressure, and altitude in CSV format
     logFile.print(bmp.temperature);
     logFile.print(",");  // Add comma as separator
@@ -295,7 +314,7 @@ if (start)
 }
 
 
-  static float maxAltitude = 0; // Variable to store the maximum altitude
+  float maxAltitude = 0; // Variable to store the maximum altitude
     float currentAltitude = readAltitude(); // Get the current altitude
 
     // Check if the current altitude is greater than the maximum recorded altitude
@@ -303,14 +322,16 @@ if (start)
         maxAltitude = currentAltitude; // Update max altitude
     }
 
-    Serial.print("Current Altitude: ");
-    Serial.print(currentAltitude);
-    Serial.print(" m, Max Altitude: ");
-    Serial.print(maxAltitude);
-    Serial.println(" m");
+    //Serial.print("Current Altitude: ");
+    Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
+    Serial.print(", ");
+    Serial.println(5.0+startAlt);
 
-    if (currentAltitude - prevAlt > 0.5)
+    if (currentAltitude - prevAlt > 0.1)
     {
       start=true;
     }
+    prevAlt = currentAltitude;
+
+    digitalWrite(ledPin, HIGH);
 }
