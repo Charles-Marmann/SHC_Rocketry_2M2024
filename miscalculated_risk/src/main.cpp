@@ -87,6 +87,7 @@ void comma() {
 CRGB leds[NUM_LEDS];
 
 Servo BRAKE_PWM;
+Servo CAM_PWM;
 //end of pwm stuff
 
 //Sensor assignments and sensor stuff
@@ -118,9 +119,17 @@ SETUP LOOP
 
 **************************************************************************/
 void setup() {
+  //Correctly overclock SPI
+  //Get the processor sys_clk frequency in Hz
+  /*
+  uint32_t freq = clock_get_hz(clk_sys);
+
+  //clk_peri does not have a divider, so input and output frequencies will be the same
+  clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS, freq, freq); */
   //initialize motor
+
   BRAKE_PWM.writeMicroseconds(500);
-  BRAKE_PWM.attach(9);
+  BRAKE_PWM.attach(3);
   //pinMode(BRAKE_PWM, OUTPUT);
 
   //Connect to serial monitor
@@ -383,6 +392,8 @@ void setup() {
   //Launch detect
   launchTime = millis();
   flightState = 2;
+  CAM_PWM.attach(21);
+  CAM_PWM.writeMicroseconds(2300);
   SRLPrintln("\n*****************");
   SRLPrintln("Launch Detected!");
   SRLPrintln("*****************");
@@ -438,6 +449,8 @@ void loop() {
   if (flightState != 4) {
     
     //Pull data
+
+    //Time
     unsigned long logTime = millis();
 
     //BNO
@@ -484,6 +497,7 @@ void loop() {
     }
     else {
       leds[3] = CRGB(255, 0, 0);
+      FastLED.show();
       SRLPrintln("\nFailed to open CSV file");
     }
     
