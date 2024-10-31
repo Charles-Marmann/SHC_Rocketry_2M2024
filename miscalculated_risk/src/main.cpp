@@ -393,7 +393,7 @@ void setup() {
   launchTime = millis();
   flightState = 2;
   CAM_PWM.attach(21);
-  CAM_PWM.writeMicroseconds(2300);
+  CAM_PWM.writeMicroseconds(2500);
   SRLPrintln("\n*****************");
   SRLPrintln("Launch Detected!");
   SRLPrintln("*****************");
