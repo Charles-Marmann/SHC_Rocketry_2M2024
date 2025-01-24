@@ -387,7 +387,7 @@ void setup() {
     SRLPrintln(" m/s^2");
     delay(SENSOR_SAMPLE_MIN_DELAY);
 
-  } while ((accelerometerData.acceleration.y >= -20) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - altOffset) <= 10));
+  } while ((accelerometerData.acceleration.y >= -30) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - altOffset) <= 10));
   
   //Launch detect
   launchTime = millis();
