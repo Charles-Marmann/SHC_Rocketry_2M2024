@@ -87,8 +87,11 @@ void comma() {
 CRGB leds[NUM_LEDS];
 
 Servo BRAKE_PWM;
-Servo CAM_PWM;
+//Servo CAM_PWM;
 //end of pwm stuff
+
+const int cam_pin = 28;
+bool cam_pin_high;
 
 //Sensor assignments and sensor stuff
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
@@ -97,7 +100,7 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
 Adafruit_BMP3XX bmp;
 #define SEALEVELPRESSURE_HPA (1013.25) //Sea level pressure for calculating altitude
 float altOffset; //Zero altitude
-#define AEROBRAKE_DEPLOY (800) //Altitude at which to deploy aerobrakes
+#define AEROBRAKE_DEPLOY (700) //Altitude at which to deploy aerobrakes
 
 float altIndex[3]; //New altitude indexed in every 5 seconds after launch
 
@@ -128,9 +131,13 @@ void setup() {
   clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS, freq, freq); */
   //initialize motor
 
-  BRAKE_PWM.writeMicroseconds(500);
+  BRAKE_PWM.writeMicroseconds(2500);
   BRAKE_PWM.attach(3);
   //pinMode(BRAKE_PWM, OUTPUT);
+  
+  pinMode(cam_pin,OUTPUT);
+  digitalWrite(cam_pin,LOW);
+  cam_pin_high = false;
 
   //Connect to serial monitor
   #if ENABLESERIALPRINT
@@ -142,7 +149,7 @@ void setup() {
   SRLPrintln("");
   //Add led element
   FastLED.addLeds<NEOPIXEL, LED_PWM>(leds, NUM_LEDS);  //Defaults to GRB color order
-  FastLED.setBrightness(25);
+  FastLED.setBrightness(15);
   //LED test
   fill_solid(leds, NUM_LEDS, CRGB(255,0,0));
   FastLED.show(); 
@@ -392,8 +399,14 @@ void setup() {
   //Launch detect
   launchTime = millis();
   flightState = 2;
-  CAM_PWM.attach(21);
-  CAM_PWM.writeMicroseconds(2500);
+
+  //CAM_PWM.attach(21);
+  //CAM_PWM.writeMicroseconds(2500);
+
+  //Activate camera signal
+  digitalWrite(cam_pin,HIGH);
+  cam_pin_high = true;
+
   SRLPrintln("\n*****************");
   SRLPrintln("Launch Detected!");
   SRLPrintln("*****************");
@@ -410,11 +423,17 @@ void loop() {
   
   //State machine
 
+  //Turn camera pin back off
+  if ((cam_pin_high == true) && ((millis() - launchTime) >= 300)) {
+    digitalWrite(cam_pin,LOW);
+    cam_pin_high = false;
+  }
+
   //Aerobrake Deploy
   if ((flightState == 2) && ((bmp.readAltitude(SEALEVELPRESSURE_HPA) - altOffset)>= AEROBRAKE_DEPLOY)) {
     flightState = 3;
     SRLPrintln("\nAt altitude, aerobrakes deployed");
-    BRAKE_PWM.writeMicroseconds(2500);
+    BRAKE_PWM.writeMicroseconds(500);
     fill_solid(leds, NUM_LEDS, CRGB(255, 100, 0));
     FastLED.show();
   }
@@ -443,6 +462,10 @@ void loop() {
     SRLPrintln(" meters");
     fill_solid(leds, NUM_LEDS, CRGB(0, 0, 255));
     FastLED.show();
+
+    digitalWrite(cam_pin,HIGH);
+    delay(1000);
+    digitalWrite(cam_pin,LOW);
   }
 
   //Perform logging when not landed
