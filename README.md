@@ -41,7 +41,7 @@ If you are seeing this file it is safe to assume that you have at least found th
 ------------------------
 Below is the home page of Github Desktop with multiple areas highlighted
 ![alt text](image-8.png)
-### RED: This area is where you will be able to see changes that you have made as well as past changes. At the bottom is the commit button. After giving you changes a name, you can press the commit button to upload your changes.
+### <span style="color: red;">RED: </span>This area is where you will be able to see changes that you have made as well as past changes. At the bottom is the commit button. After giving you changes a name, you can press the commit button to upload your changes.
 ### GREEN: This area is where you will be able to open your project in VSCode, do note that you will still need to open your project in with Platform IO afterwards.
 ### BLUE: This is the most important button. When changes are made you will need to click this button to download them, after you commit changes you will need to press this button to upload them.
 ## Github Desktop does not work like google docs! Two people cannot actively make changes on the same branch without running into some issues. Github is really good at sorting these issues out, but you should always double check your code afterwards.
